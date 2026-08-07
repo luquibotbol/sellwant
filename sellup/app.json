@@ -23,7 +23,22 @@
       }
     },
 
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SellUp uses the camera to scan the QR on your ticket so we can check it hasn't already been listed. The image never leaves your device.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SellUp reads the QR from a screenshot of your ticket so we can check it hasn't already been listed."
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     }

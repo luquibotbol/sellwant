@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start --tunnel",
+    "web": "CI=1 expo start --web --port 8081",
+    "typecheck": "tsc --noEmit",
+    "test": "bun scripts/test-normalise.ts",
     "start-web": "expo start --web --tunnel",
     "start-web-dev": "DEBUG=expo* expo start --web --tunnel"
   },

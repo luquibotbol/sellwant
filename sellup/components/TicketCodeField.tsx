@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Platform, Pressable } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Text, Card, Button, Badge } from '@/components/ui';
+import QrScannerModal from '@/components/QrScannerModal';
 import { colors, space, radius } from '@/constants/theme';
 import { decodeQrFromImageWeb, hashPayload, maskCode } from '@/services/qr';
 
@@ -24,6 +25,14 @@ interface Props {
 export function TicketCodeField({ onCode, hash, preview, rejection }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+
+  const web = Platform.OS === 'web';
+
+  /** Hash the payload here so the raw code never leaves this component. */
+  const accept = async (payload: string) => {
+    onCode(await hashPayload(payload), maskCode(payload));
+  };
 
   const pickAndDecode = async () => {
     setError(null);
@@ -35,26 +44,26 @@ export function TicketCodeField({ onCode, hash, preview, rejection }: Props) {
       });
       if (picked.canceled) return;
 
-      const uri = picked.assets[0].uri;
-
-      if (Platform.OS !== 'web') {
-        setError(
-          'Scanning from a photo isn’t supported on this device yet. Open SellUp in a browser to upload a screenshot.'
-        );
-        return;
-      }
-
-      const payload = await decodeQrFromImageWeb(uri);
+      const payload = await decodeQrFromImageWeb(picked.assets[0].uri);
       if (!payload) {
         setError('No QR code found in that image. Try a clearer screenshot.');
         return;
       }
-
-      onCode(await hashPayload(payload), maskCode(payload));
+      await accept(payload);
     } catch (e: any) {
       setError(e?.message ?? 'Could not read that image');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleScanned = async (payload: string) => {
+    setScanning(false);
+    setError(null);
+    try {
+      await accept(payload);
+    } catch (e: any) {
+      setError(e?.message ?? 'Could not read that code');
     }
   };
 
@@ -104,19 +113,43 @@ export function TicketCodeField({ onCode, hash, preview, rejection }: Props) {
         </View>
       )}
 
-      <Button
-        title={Platform.OS === 'web' ? 'Upload ticket screenshot' : 'Choose ticket image'}
-        variant="secondary"
-        block
-        loading={busy}
-        onPress={pickAndDecode}
-        style={styles.button}
-      />
+      {/* On a phone the ticket is usually on the same device, so scanning is
+          the primary path there; on web there is no camera worth using and the
+          screenshot upload is. */}
+      {web ? (
+        <Button
+          title="Upload ticket screenshot"
+          variant="secondary"
+          block
+          loading={busy}
+          onPress={pickAndDecode}
+          style={styles.button}
+        />
+      ) : (
+        <Button
+          title="Scan ticket QR"
+          variant="secondary"
+          block
+          onPress={() => {
+            setError(null);
+            setScanning(true);
+          }}
+          style={styles.button}
+        />
+      )}
 
       {!!error && (
         <Text variant="caption" tone="destructive" style={styles.note}>
           {error}
         </Text>
+      )}
+
+      {!web && (
+        <QrScannerModal
+          visible={scanning}
+          onClose={() => setScanning(false)}
+          onScanned={handleScanned}
+        />
       )}
     </Card>
   );
