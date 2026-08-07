@@ -6,7 +6,9 @@
     "start": "expo start --tunnel",
     "web": "CI=1 expo start --web --port 8081",
     "typecheck": "tsc --noEmit",
-    "test": "bun scripts/test-normalise.ts",
+    "qrs": "bun scripts/make-test-qrs.ts",
+    "test": "bun scripts/test-normalise.ts && bun scripts/make-test-qrs.ts >/dev/null && bun scripts/test-decode.ts",
+    "test:decode": "bun scripts/test-decode.ts",
     "start-web": "expo start --web --tunnel",
     "start-web-dev": "DEBUG=expo* expo start --web --tunnel"
   },
@@ -51,7 +53,10 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@expo/ngrok": "^4.1.0",
+    "@types/pngjs": "^6.0.5",
     "@types/react": "~18.3.12",
+    "pngjs": "^7.0.0",
+    "qrcode": "^1.5.4",
     "typescript": "~5.3.3"
   },
   "private": true
