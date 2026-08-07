@@ -1,233 +1,251 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Image, ScrollView, Alert, Platform, Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
-import { LogOut, User, Settings, Heart, ShoppingBag, Clock, CreditCard, List, Tag } from 'lucide-react-native';
-import { useAuthStore } from '@/store/authStore';
-import Colors from '@/constants/colors';
-import NavBar from '@/components/NavBar';
-import Button from '@/components/Button';
+import React, { useState } from 'react';
+import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { Redirect, router } from 'expo-router';
+import {
+  Text,
+  Card,
+  Button,
+  Input,
+  Badge,
+  Separator,
+  ErrorState,
+} from '@/components/ui';
+import { colors, space, radius, maxContentWidth } from '@/constants/theme';
+import { useAsync } from '@/hooks/useAsync';
+import {
+  getMyProfile,
+  signOut,
+  updateMyProfile,
+  PaymentHandle,
+} from '@/services/data';
+
+const KINDS: { key: PaymentHandle['kind']; label: string; hint: string }[] = [
+  { key: 'venmo', label: 'Venmo', hint: '@your-handle' },
+  { key: 'cashapp', label: 'Cash App', hint: '$yourcashtag' },
+  { key: 'zelle', label: 'Zelle', hint: 'phone or email' },
+  { key: 'paypal', label: 'PayPal', hint: 'paypal.me/you' },
+];
+
+function initials(name: string, email: string) {
+  const source = name.trim() || email;
+  return source.slice(0, 2).toUpperCase();
+}
 
 export default function ProfileScreen() {
-  const router = useRouter();
-  const { user, signOut } = useAuthStore();
-  
-  const handleSignOut = () => {
-    if (Platform.OS === 'web') {
-      if (confirm('Are you sure you want to sign out?')) {
-        signOut();
-        router.replace('/');
-      }
-    } else {
-      Alert.alert(
-        'Sign Out',
-        'Are you sure you want to sign out?',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Sign Out',
-            onPress: () => {
-              signOut();
-              router.replace('/');
-            },
-          },
-        ]
-      );
+  const profile = useAsync(getMyProfile, []);
+  const [kind, setKind] = useState<PaymentHandle['kind']>('venmo');
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  if (profile.loading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator color={colors.mutedForeground} />
+      </View>
+    );
+  }
+  if (profile.error) {
+    return (
+      <View style={styles.container}>
+        <ErrorState message={profile.error.message} onRetry={profile.reload} />
+      </View>
+    );
+  }
+  if (!profile.data) return <Redirect href="/" />;
+
+  const me = profile.data;
+  const handles = me.accepted_payments ?? [];
+  const activeKind = KINDS.find((k) => k.key === kind)!;
+
+  const addHandle = async () => {
+    if (!value.trim()) {
+      setSaveError('Enter your handle');
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateMyProfile({
+        accepted_payments: [
+          ...handles.filter((h) => h.kind !== kind),
+          { kind, value: value.trim() },
+        ],
+      });
+      setValue('');
+      profile.reload();
+    } catch (e: any) {
+      setSaveError(e?.message ?? 'Could not save');
+    } finally {
+      setSaving(false);
     }
   };
-  
-  const navigateTo = (route: string) => {
-    router.push(route);
+
+  const removeHandle = async (target: PaymentHandle) => {
+    try {
+      await updateMyProfile({
+        accepted_payments: handles.filter((h) => h.kind !== target.kind),
+      });
+      profile.reload();
+    } catch {
+      /* surfaced on next load */
+    }
   };
-  
+
   return (
-    <SafeAreaView style={styles.container}>
-      <NavBar />
-      
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.profileHeader}>
-          {user?.profileImage ? (
-            <Image 
-              source={{ uri: user.profileImage }} 
-              style={styles.profileImage} 
-            />
-          ) : (
-            <View style={styles.profileImagePlaceholder}>
-              <User size={40} color={Colors.background} />
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <View style={styles.identity}>
+        <View style={styles.avatar}>
+          <Text variant="heading">{initials(me.full_name, me.email)}</Text>
+        </View>
+        <View style={styles.identityText}>
+          <Text variant="title">{me.full_name || 'No name yet'}</Text>
+          <Text variant="small" tone="muted">
+            {me.email}
+          </Text>
+        </View>
+      </View>
+
+      {me.is_suspended && (
+        <Badge label="SUSPENDED" variant="destructive" style={styles.suspended} />
+      )}
+
+      {/* Reputation is observed behaviour only -- no stars, no reviews. */}
+      <Card style={styles.stats}>
+        <View style={styles.stat}>
+          <Text variant="display">{me.completed_deals}</Text>
+          <Text variant="caption" tone="muted">
+            completed {me.completed_deals === 1 ? 'handoff' : 'handoffs'}
+          </Text>
+        </View>
+        <Separator style={styles.statDivider} />
+        <View style={styles.stat}>
+          {/* Full year, not '26 -- "Aug 26" next to a number reads as a date. */}
+          <Text variant="display">
+            {new Date(me.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+          </Text>
+          <Text variant="caption" tone="muted">
+            member since
+          </Text>
+        </View>
+      </Card>
+
+      <Text variant="heading" style={styles.sectionTitle}>
+        How you get paid
+      </Text>
+      <Text variant="small" tone="muted" style={styles.sectionBody}>
+        Money moves directly between you and the other student. SellUp never
+        touches it — we just pass along your handle.
+      </Text>
+
+      {handles.length > 0 && (
+        <Card style={styles.handles}>
+          {handles.map((h, i) => (
+            <View key={h.kind}>
+              {i > 0 && <Separator style={styles.handleDivider} />}
+              <View style={styles.handleRow}>
+                <View>
+                  <Text variant="bodyMedium">
+                    {KINDS.find((k) => k.key === h.kind)?.label ?? h.kind}
+                  </Text>
+                  <Text variant="small" tone="muted">
+                    {h.value}
+                  </Text>
+                </View>
+                <Pressable onPress={() => removeHandle(h)} hitSlop={8}>
+                  <Text variant="small" tone="destructive">
+                    Remove
+                  </Text>
+                </Pressable>
+              </View>
             </View>
-          )}
-          
-          <Text style={styles.userName}>{user?.name || 'User'}</Text>
-          <Text style={styles.userEmail}>{user?.email || 'user@example.com'}</Text>
-          
-          <Button
-            title="Edit Profile"
-            onPress={() => navigateTo('/personal-info')}
-            variant="outline"
-            style={styles.editProfileButton}
-          />
+          ))}
+        </Card>
+      )}
+
+      <Card style={styles.addCard}>
+        <View style={styles.kinds}>
+          {KINDS.map((k) => (
+            <Pressable
+              key={k.key}
+              onPress={() => setKind(k.key)}
+              style={[styles.kind, kind === k.key && styles.kindActive]}
+            >
+              <Text variant="small" tone={kind === k.key ? 'default' : 'muted'}>
+                {k.label}
+              </Text>
+            </Pressable>
+          ))}
         </View>
-        
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          
-          <Pressable 
-            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-            onPress={() => navigateTo('/personal-info')}
-          >
-            <User size={20} color={Colors.accent} />
-            <Text style={styles.menuItemText}>Personal Information</Text>
-          </Pressable>
-          
-          <Pressable 
-            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-            onPress={() => navigateTo('/payment-methods')}
-          >
-            <CreditCard size={20} color={Colors.accent} />
-            <Text style={styles.menuItemText}>Payment Methods</Text>
-          </Pressable>
-          
-          <Pressable 
-            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-            onPress={() => navigateTo('/settings')}
-          >
-            <Settings size={20} color={Colors.accent} />
-            <Text style={styles.menuItemText}>Settings</Text>
-          </Pressable>
-        </View>
-        
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>My Listings</Text>
-          
-          <Pressable 
-            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-            onPress={() => navigateTo('/manage-listings')}
-          >
-            <List size={20} color={Colors.accent} />
-            <Text style={styles.menuItemText}>Manage All Listings</Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>New</Text>
-            </View>
-          </Pressable>
-          
-          <Pressable 
-            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-            onPress={() => navigateTo('/my-buy-listings')}
-          >
-            <ShoppingBag size={20} color={Colors.accent} />
-            <Text style={styles.menuItemText}>My Buy Listings</Text>
-          </Pressable>
-          
-          <Pressable 
-            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-            onPress={() => navigateTo('/my-sell-listings')}
-          >
-            <Tag size={20} color={Colors.accent} />
-            <Text style={styles.menuItemText}>My Sell Listings</Text>
-          </Pressable>
-          
-          <Pressable 
-            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-            onPress={() => navigateTo('/history')}
-          >
-            <Clock size={20} color={Colors.accent} />
-            <Text style={styles.menuItemText}>Transaction History</Text>
-          </Pressable>
-        </View>
-        
-        <Button
-          title="Sign Out"
-          onPress={handleSignOut}
-          variant="outline"
-          style={styles.signOutButton}
+        <Input
+          value={value}
+          onChangeText={setValue}
+          placeholder={activeKind.hint}
+          autoCapitalize="none"
+          autoCorrect={false}
+          error={saveError ?? undefined}
+          containerStyle={styles.addInput}
         />
-      </ScrollView>
-    </SafeAreaView>
+        <Button
+          title={handles.some((h) => h.kind === kind) ? `Update ${activeKind.label}` : `Add ${activeKind.label}`}
+          onPress={addHandle}
+          loading={saving}
+          variant="secondary"
+          block
+        />
+      </Card>
+
+      <Button
+        title="Sign out"
+        variant="outline"
+        block
+        style={styles.signOut}
+        onPress={async () => {
+          await signOut();
+          router.replace('/');
+        }}
+      />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
+  container: { flex: 1, backgroundColor: colors.background },
+  content: {
+    padding: space[5],
+    paddingBottom: space[16],
+    width: '100%',
+    maxWidth: maxContentWidth,
+    alignSelf: 'center',
   },
-  scrollContent: {
-    padding: 16,
+  centered: { alignItems: 'center', justifyContent: 'center' },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: space[4] },
+  avatar: {
+    width: 56, height: 56, borderRadius: radius.full,
+    backgroundColor: colors.muted,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: colors.border,
   },
-  profileHeader: {
-    alignItems: 'center',
-    marginVertical: 24,
+  identityText: { flex: 1 },
+  suspended: { marginTop: space[4] },
+  stats: { flexDirection: 'row', alignItems: 'center', marginTop: space[6] },
+  stat: { flex: 1, alignItems: 'center', gap: space[1] },
+  statDivider: { width: 1, height: 40, backgroundColor: colors.border },
+  sectionTitle: { marginTop: space[8] },
+  sectionBody: { marginTop: space[2] },
+  handles: { marginTop: space[4], paddingVertical: space[1] },
+  handleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: space[3],
   },
-  profileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 16,
+  handleDivider: { marginHorizontal: -space[4] },
+  addCard: { marginTop: space[3] },
+  kinds: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[4] },
+  kind: {
+    paddingHorizontal: space[3], paddingVertical: space[2],
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.border,
   },
-  profileImagePlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  userName: {
-    color: Colors.text,
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  userEmail: {
-    color: Colors.textSecondary,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  editProfileButton: {
-    width: 150,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    color: Colors.accent,
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  menuItemPressed: {
-    opacity: 0.7,
-    backgroundColor: Colors.card,
-  },
-  menuItemText: {
-    color: Colors.text,
-    fontSize: 16,
-    marginLeft: 12,
-    flex: 1,
-  },
-  badge: {
-    backgroundColor: Colors.accent,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  badgeText: {
-    color: Colors.background,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  signOutButton: {
-    marginTop: 24,
-    marginBottom: 32,
-  },
+  kindActive: { backgroundColor: colors.muted, borderColor: colors.borderStrong },
+  addInput: { marginBottom: space[3] },
+  signOut: { marginTop: space[8] },
 });

@@ -1,15 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { Redirect } from 'expo-router';
-import Colors from '@/constants/colors';
-import Button from '@/components/Button';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import { Redirect, router } from 'expo-router';
+import { Text, Button } from '@/components/ui';
+import { colors, space, maxContentWidth } from '@/constants/theme';
 import { getSession, onAuthChange } from '@/services/data';
-import { router } from 'expo-router';
 
 /**
- * Where the magic link lands on web. The Supabase client is configured with
- * detectSessionInUrl, so it exchanges the code in the URL on load -- this
- * screen just waits for that to resolve.
+ * Where the magic link lands on web. The Supabase client runs with
+ * detectSessionInUrl, so it exchanges the code on load; this screen waits.
  */
 export default function AuthCallback() {
   const [state, setState] = useState<'working' | 'done' | 'failed'>('working');
@@ -23,13 +21,12 @@ export default function AuthCallback() {
 
     getSession()
       .then((s) => {
-        if (cancelled) return;
-        if (s) setState('done');
+        if (!cancelled && s) setState('done');
       })
       .catch(() => {});
 
-    // If the exchange hasn't produced a session in a few seconds, the link was
-    // expired, already used, or the redirect URL isn't allow-listed.
+    // No session after a few seconds means the link expired, was already used,
+    // or this origin isn't in Supabase's redirect allow-list.
     const timer = setTimeout(() => {
       if (!cancelled) setState((s) => (s === 'working' ? 'failed' : s));
     }, 8000);
@@ -45,31 +42,44 @@ export default function AuthCallback() {
 
   return (
     <View style={styles.container}>
-      {state === 'working' ? (
-        <>
-          <ActivityIndicator color={Colors.accent} />
-          <Text style={styles.text}>Signing you in…</Text>
-        </>
-      ) : (
-        <>
-          <Text style={styles.title}>That link didn&apos;t work</Text>
-          <Text style={styles.text}>
-            It may have expired or already been used. Request a new one.
-          </Text>
-          <Button
-            title="Back to sign in"
-            onPress={() => router.replace('/')}
-            style={styles.button}
-          />
-        </>
-      )}
+      <View style={styles.inner}>
+        {state === 'working' ? (
+          <>
+            <ActivityIndicator color={colors.mutedForeground} />
+            <Text variant="small" tone="muted" style={styles.text}>
+              Signing you in…
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text variant="title">That link didn&apos;t work</Text>
+            <Text variant="small" tone="muted" style={styles.text}>
+              It may have expired or already been used. Request a new one.
+            </Text>
+            <Button
+              title="Back to sign in"
+              variant="outline"
+              onPress={() => router.replace('/')}
+              style={styles.button}
+            />
+          </>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  title: { color: Colors.text, fontSize: 22, fontWeight: 'bold', marginBottom: 8 },
-  text: { color: Colors.textSecondary, fontSize: 15, marginTop: 12, textAlign: 'center', lineHeight: 22 },
-  button: { marginTop: 24 },
+  container: { flex: 1, backgroundColor: colors.background },
+  inner: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: space[6],
+    width: '100%',
+    maxWidth: maxContentWidth,
+    alignSelf: 'center',
+  },
+  text: { marginTop: space[3], textAlign: 'center' },
+  button: { marginTop: space[6] },
 });
