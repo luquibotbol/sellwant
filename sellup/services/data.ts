@@ -144,17 +144,50 @@ export async function updateMyProfile(patch: {
 const LISTING_SELECT =
   '*, poster:profiles!listings_user_id_fkey(id, full_name, profile_picture, completed_deals)';
 
-/** The feed: what's coming up, soonest first. Not a search box. */
+export interface Category {
+  id: number;
+  name: string;
+  image_url: string | null;
+}
+
+export async function listCategories(): Promise<Category[]> {
+  const { data, error } = await supabase.from('categories').select('*').order('id');
+  if (error) throw error;
+  return (data ?? []) as Category[];
+}
+
+/** PostgREST `or` needs commas and parens escaped or they break the filter. */
+function escapeForOr(term: string) {
+  return term.replace(/[,()]/g, ' ').trim();
+}
+
+/**
+ * The feed, and search. Soonest first.
+ *
+ * Search runs in Postgres against a trigram index rather than filtering an
+ * already-fetched page, so it keeps working once there are more listings than
+ * fit in one request.
+ */
 export async function listActive(
-  opts: { type?: ListingType } = {}
+  opts: { type?: ListingType; q?: string; categoryId?: number } = {}
 ): Promise<ListingWithPoster[]> {
-  let q = supabase
+  let query = supabase
     .from('listings')
     .select(LISTING_SELECT)
     .eq('status', 'active')
     .order('event_date', { ascending: true, nullsFirst: false });
-  if (opts.type) q = q.eq('type', opts.type);
-  const { data, error } = await q;
+
+  if (opts.type) query = query.eq('type', opts.type);
+  if (opts.categoryId) query = query.eq('category_id', opts.categoryId);
+
+  const term = escapeForOr(opts.q ?? '');
+  if (term) {
+    query = query.or(
+      `title.ilike.%${term}%,location.ilike.%${term}%,description.ilike.%${term}%`
+    );
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as ListingWithPoster[];
 }
@@ -193,6 +226,31 @@ export async function createListing(input: {
     .single();
   if (error) throw error;
   return data as Listing;
+}
+
+export type RegistryResult =
+  | { ok: true }
+  | { ok: false; sameSeller: boolean };
+
+/**
+ * Submit a ticket code hash to the registry.
+ *
+ * Goes through a security-definer function because `ticket_codes` has no RLS
+ * policies at all -- clients can neither read nor write it directly, so a
+ * leaked key cannot enumerate the registry. The unique index, not this call,
+ * is what actually guarantees uniqueness; collisions are recorded server-side.
+ */
+export async function registerTicketCode(
+  listingId: string,
+  codeHash: string
+): Promise<RegistryResult> {
+  const { data, error } = await supabase.rpc('register_ticket_code', {
+    p_listing_id: listingId,
+    p_code_hash: codeHash,
+  });
+  if (error) throw error;
+  const result = data as { ok: boolean; same_seller?: boolean };
+  return result.ok ? { ok: true } : { ok: false, sameSeller: !!result.same_seller };
 }
 
 export async function cancelListing(id: string) {

@@ -1,24 +1,33 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
   FlatList,
+  ScrollView,
   ActivityIndicator,
   Pressable,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import {
   Text,
   Card,
   Badge,
+  Input,
   Skeleton,
   EmptyState,
   ErrorState,
 } from '@/components/ui';
 import { colors, space, radius, maxContentWidth } from '@/constants/theme';
 import { useAsync } from '@/hooks/useAsync';
-import { getSession, listActive, ListingType, ListingWithPoster } from '@/services/data';
+import {
+  getSession,
+  listActive,
+  listCategories,
+  ListingType,
+  ListingWithPoster,
+} from '@/services/data';
 
 type Filter = 'all' | ListingType;
 
@@ -51,11 +60,29 @@ function whenAndWhere(date: string | null, location: string | null) {
 
 export default function FeedScreen() {
   const [filter, setFilter] = useState<Filter>('all');
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [query, setQuery] = useState('');
+  const [debounced, setDebounced] = useState('');
+
+  // Search runs in Postgres, so debounce rather than firing per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query.trim()), 250);
+    return () => clearTimeout(t);
+  }, [query]);
+
   const session = useAsync(getSession, []);
+  const categories = useAsync(listCategories, []);
   const listings = useAsync(
-    () => listActive(filter === 'all' ? {} : { type: filter }),
-    [filter]
+    () =>
+      listActive({
+        type: filter === 'all' ? undefined : filter,
+        q: debounced || undefined,
+        categoryId: categoryId ?? undefined,
+      }),
+    [filter, debounced, categoryId]
   );
+
+  const searching = !!debounced || categoryId !== null;
 
   if (session.loading) {
     return (
@@ -78,6 +105,15 @@ export default function FeedScreen() {
           </Pressable>
         </View>
 
+        <Input
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search by name or place"
+          autoCapitalize="none"
+          autoCorrect={false}
+          containerStyle={styles.search}
+        />
+
         <View style={styles.tabs}>
           {FILTERS.map((f) => {
             const active = filter === f.key;
@@ -95,6 +131,39 @@ export default function FeedScreen() {
           })}
         </View>
 
+        {/* Category is a secondary axis to the buy/sell filter above, so it
+            reads as a quiet underline nav rather than a second row of pills --
+            two bordered control groups at equal weight was visual noise. */}
+        {/* A horizontal ScrollView is still a flex child of a column, so without
+            flexGrow:0 it stretches to fill the remaining height -- which pushed
+            the list down and left its scrollbar floating mid-screen. */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoriesScroll}
+          contentContainerStyle={styles.categories}
+        >
+          {[{ id: null as number | null, name: 'All' }, ...(categories.data ?? [])].map(
+            (c) => {
+              const active = categoryId === c.id;
+              return (
+                <Pressable
+                  key={c.id ?? 'all'}
+                  onPress={() => setCategoryId(c.id)}
+                  style={[styles.category, active && styles.categoryActive]}
+                >
+                  <Text
+                    variant={active ? 'bodyMedium' : 'body'}
+                    tone={active ? 'default' : 'subtle'}
+                  >
+                    {c.name}
+                  </Text>
+                </Pressable>
+              );
+            }
+          )}
+        </ScrollView>
+
         {listings.error ? (
           <ErrorState message={listings.error.message} onRetry={listings.reload} />
         ) : listings.loading && !listings.data ? (
@@ -109,20 +178,44 @@ export default function FeedScreen() {
             keyExtractor={(l) => l.id}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
+            // Pull-to-refresh is a touch gesture. On web RNW still reserves
+            // space for the spinner, which left a gap and a stray dash above
+            // the list.
             refreshControl={
-              <RefreshControl
-                refreshing={listings.loading}
-                onRefresh={listings.reload}
-                tintColor={colors.mutedForeground}
-              />
+              Platform.OS === 'web' ? undefined : (
+                <RefreshControl
+                  refreshing={listings.loading}
+                  onRefresh={listings.reload}
+                  tintColor={colors.mutedForeground}
+                />
+              )
             }
             ListEmptyComponent={
-              <EmptyState
-                title="Nothing here yet"
-                body="Post a ticket you're selling, or ask for one you want."
-                actionLabel="Post a listing"
-                onAction={() => router.push('/create-event')}
-              />
+              searching ? (
+                // A search with no hits is a different situation from an empty
+                // marketplace, and offering "post a listing" here would be a
+                // non-sequitur.
+                <EmptyState
+                  title="No matches"
+                  body={
+                    debounced
+                      ? `Nothing matches “${debounced}”.`
+                      : 'Nothing in this category yet.'
+                  }
+                  actionLabel="Clear filters"
+                  onAction={() => {
+                    setQuery('');
+                    setCategoryId(null);
+                  }}
+                />
+              ) : (
+                <EmptyState
+                  title="Nothing here yet"
+                  body="Post a ticket you're selling, or ask for one you want."
+                  actionLabel="Post a listing"
+                  onAction={() => router.push('/create-event')}
+                />
+              )
             }
             renderItem={({ item }: { item: ListingWithPoster }) => {
               const isSell = item.type === 'sell';
@@ -187,6 +280,15 @@ const styles = StyleSheet.create({
     paddingTop: space[16],
     paddingBottom: space[4],
   },
+  search: { marginHorizontal: space[5], marginBottom: space[3] },
+  categoriesScroll: { flexGrow: 0, flexShrink: 0 },
+  categories: { paddingHorizontal: space[5], gap: space[5], paddingBottom: space[3] },
+  category: {
+    paddingBottom: space[2],
+    borderBottomWidth: 1.5,
+    borderBottomColor: colors.transparent,
+  },
+  categoryActive: { borderBottomColor: colors.foreground },
   tabs: {
     flexDirection: 'row',
     marginHorizontal: space[5],

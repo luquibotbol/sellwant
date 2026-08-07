@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, StyleSheet, TextInputProps, ViewStyle } from 'react-native';
+import { View, TextInput, StyleSheet, TextInputProps, ViewStyle, Platform } from 'react-native';
 import Text from '@/components/ui/Text';
 import { colors, radius, space, type as typeScale, control } from '@/constants/theme';
 
@@ -32,6 +32,9 @@ export function Input({ label, error, hint, containerStyle, ...rest }: InputProp
         }}
         style={[
           styles.input,
+          // The browser draws its own focus ring on top of our border, in the
+          // UA accent colour. We render focus ourselves via borderStrong.
+          Platform.OS === 'web' && ({ outlineStyle: 'none' } as object),
           focused && styles.focused,
           !!error && styles.errored,
           rest.multiline && styles.multiline,
