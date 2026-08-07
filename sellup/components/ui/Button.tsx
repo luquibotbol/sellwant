@@ -8,7 +8,12 @@ export type ButtonVariant =
   | 'secondary'
   | 'outline'
   | 'ghost'
-  | 'destructive';
+  | 'destructive'
+  /** Solid market colours. Reserved for the one committing action on a
+   *  screen -- posting a listing, locking in -- so the colour stays meaningful
+   *  rather than becoming decoration. */
+  | 'sell'
+  | 'want';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonProps {
@@ -36,8 +41,9 @@ export function Button({
   icon,
 }: ButtonProps) {
   const inactive = disabled || loading;
+  const solid = variant === 'default' || variant === 'sell' || variant === 'want';
   const tone =
-    variant === 'default' ? 'inverse'
+    solid ? 'inverse'
     : variant === 'destructive' ? 'destructive'
     : 'default';
 
@@ -59,7 +65,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === 'default' ? colors.primaryForeground : colors.foreground}
+          color={solid ? colors.primaryForeground : colors.foreground}
         />
       ) : (
         <View style={styles.content}>
@@ -90,6 +96,8 @@ const styles = StyleSheet.create({
   outline: { backgroundColor: colors.transparent, borderColor: colors.border },
   ghost: { backgroundColor: colors.transparent },
   destructive: { backgroundColor: colors.destructiveMuted, borderColor: 'rgba(239,68,68,0.3)' },
+  sell: { backgroundColor: colors.sell },
+  want: { backgroundColor: colors.want },
   pressed: { opacity: 0.85 },
   inactive: { opacity: 0.5 },
 });

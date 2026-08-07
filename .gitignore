@@ -7,3 +7,4 @@ node_modules
 
 # generated QR fixtures
 test-qr/
+dist/

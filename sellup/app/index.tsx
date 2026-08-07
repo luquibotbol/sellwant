@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Redirect } from 'expo-router';
-import { Text, Button, Input, Card } from '@/components/ui';
+import { Text, Wordmark, Button, Input, Card } from '@/components/ui';
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { getSession, onAuthChange, signInWithEmail } from '@/services/data';
 
@@ -64,7 +64,7 @@ export default function SignInScreen() {
     >
       <View style={styles.inner}>
         <View style={styles.brand}>
-          <Text variant="display">SellUp</Text>
+          <Wordmark size="display" />
           <Text variant="small" tone="muted" style={styles.tagline}>
             Buy what you want. Sell what you have.
           </Text>

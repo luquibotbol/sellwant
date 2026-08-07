@@ -69,6 +69,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[3],
     color: colors.foreground,
     ...typeScale.body,
+    // iOS Safari zooms the whole page whenever a focused input is under 16px.
+    // Bumping to 16 on web fixes that at the source, rather than disabling
+    // pinch-zoom in the viewport meta and breaking accessibility.
+    ...Platform.select({ web: { fontSize: 16 }, default: {} }),
   },
   multiline: { height: 100, paddingTop: space[3], textAlignVertical: 'top' },
   focused: { borderColor: colors.borderStrong },

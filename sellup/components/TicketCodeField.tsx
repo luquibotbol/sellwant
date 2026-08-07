@@ -69,7 +69,7 @@ export function TicketCodeField({ onCode, hash, preview, rejection }: Props) {
 
   if (hash && !rejection) {
     return (
-      <Card style={styles.card}>
+      <Card accent="want" style={styles.card}>
         <View style={styles.row}>
           <View style={styles.grow}>
             <Badge label="TICKET ADDED" variant="want" />
@@ -91,7 +91,7 @@ export function TicketCodeField({ onCode, hash, preview, rejection }: Props) {
   }
 
   return (
-    <Card style={styles.card}>
+    <Card accent={rejection ? 'sell' : undefined} style={styles.card}>
       <Text variant="bodyMedium">Ticket QR</Text>
       <Text variant="small" tone="muted" style={styles.help}>
         Upload a screenshot of your Bubbl ticket. We check it against every other

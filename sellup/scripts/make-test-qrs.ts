@@ -5,7 +5,8 @@
  * The interesting pair is A and A-forwarded: they encode different strings but
  * the same ticket, so the registry must treat the second as a duplicate.
  */
-import QRCode from 'qrcode';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const QRCode = require('qrcode');
 import { mkdirSync } from 'node:fs';
 
 const OUT = 'test-qr';
@@ -29,9 +30,12 @@ const codes: { file: string; payload: string; note: string }[] = [
   },
 ];
 
-for (const { file, payload, note } of codes) {
-  await QRCode.toFile(`${OUT}/${file}`, payload, { width: 512, margin: 2 });
-  console.log(`${file}\n  payload: ${payload}\n  ${note}\n`);
+async function main() {
+  for (const { file, payload, note } of codes) {
+    await QRCode.toFile(`${OUT}/${file}`, payload, { width: 512, margin: 2 });
+    console.log(`${file}\n  payload: ${payload}\n  ${note}\n`);
+  }
+  console.log(`Wrote ${codes.length} QR images to sellup/${OUT}/`);
 }
 
-console.log(`Wrote ${codes.length} QR images to sellup/${OUT}/`);
+main();

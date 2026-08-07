@@ -9,6 +9,7 @@ import {
   Geist_600SemiBold,
   Geist_700Bold,
 } from '@expo-google-fonts/geist';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from './error-boundary';
 import { colors, type as typeScale } from '@/constants/theme';
 
@@ -37,8 +38,9 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <ErrorBoundary>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+    <SafeAreaProvider>
+      <ErrorBoundary>
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.background },
@@ -54,7 +56,8 @@ export default function RootLayout() {
         <Stack.Screen name="profile" options={{ title: 'Profile', headerBackTitle: 'Back' }} />
         <Stack.Screen name="create-event" options={{ title: 'New listing', headerBackTitle: 'Back' }} />
         <Stack.Screen name="event/[id]" options={{ title: 'Listing', headerBackTitle: 'Back' }} />
-      </Stack>
-    </ErrorBoundary>
+        </Stack>
+      </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }

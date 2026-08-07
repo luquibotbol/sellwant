@@ -14,12 +14,19 @@ if (!url || !anonKey) {
   );
 }
 
+/**
+ * Static web rendering executes this module in Node, where there is no window
+ * and AsyncStorage throws. The client is inert during prerender and picks up
+ * the real session once it hydrates in the browser.
+ */
+const hasWindow = typeof window !== 'undefined';
+
 export const supabase = createClient(url, anonKey, {
   auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
+    storage: hasWindow ? AsyncStorage : undefined,
+    autoRefreshToken: hasWindow,
+    persistSession: hasWindow,
     // Only the web build returns from a magic link with the code in the URL.
-    detectSessionInUrl: Platform.OS === 'web',
+    detectSessionInUrl: hasWindow && Platform.OS === 'web',
   },
 });

@@ -10,8 +10,10 @@ import {
   Platform,
 } from 'react-native';
 import { Redirect, router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Text,
+  Wordmark,
   Card,
   Badge,
   Input,
@@ -59,6 +61,9 @@ function whenAndWhere(date: string | null, location: string | null) {
 }
 
 export default function FeedScreen() {
+  // Real insets rather than a hardcoded top pad -- with viewport-fit=cover the
+  // background runs under the notch, so content has to be told where safe is.
+  const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<Filter>('all');
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [query, setQuery] = useState('');
@@ -96,8 +101,8 @@ export default function FeedScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.frame}>
-        <View style={styles.header}>
-          <Text variant="title">SellUp</Text>
+        <View style={[styles.header, { paddingTop: insets.top + space[4] }]}>
+          <Wordmark size="title" />
           <Pressable onPress={() => router.push('/profile')} hitSlop={8}>
             <Text variant="small" tone="muted">
               Profile
@@ -277,7 +282,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: space[5],
-    paddingTop: space[16],
     paddingBottom: space[4],
   },
   search: { marginHorizontal: space[5], marginBottom: space[3] },
