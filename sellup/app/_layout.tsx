@@ -3,7 +3,6 @@ import { Stack } from 'expo-router';
 import { Platform, StatusBar } from 'react-native';
 import { ErrorBoundary } from './error-boundary';
 import Colors from '@/constants/colors';
-import { useAuthStore } from '@/store/authStore';
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
@@ -11,14 +10,8 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
-  // Load auth state on app start
-  const { loadUser } = useAuthStore();
-  
-  // Load user data on app start, but don't block rendering
-  React.useEffect(() => {
-    loadUser();
-  }, []);
-
+  // Session state lives in Supabase's own storage; screens read it through
+  // services/data. Nothing to bootstrap here.
   return (
     <ErrorBoundary>
       <StatusBar 
@@ -42,6 +35,18 @@ export default function RootLayout() {
       >
         <Stack.Screen
           name="index"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="feed"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="auth/callback"
           options={{
             headerShown: false,
           }}

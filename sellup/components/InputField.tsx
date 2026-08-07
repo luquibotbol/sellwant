@@ -10,6 +10,7 @@ interface InputFieldProps {
   secureTextEntry?: boolean;
   multiline?: boolean;
   keyboardType?: 'default' | 'email-address' | 'numeric' | 'phone-pad';
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   error?: string;
 }
 
@@ -21,6 +22,7 @@ export default function InputField({
   secureTextEntry,
   multiline,
   keyboardType = 'default',
+  autoCapitalize = 'sentences',
   error,
 }: InputFieldProps) {
   return (
@@ -33,6 +35,7 @@ export default function InputField({
           error && styles.inputError,
         ]}
         value={value}
+        autoCapitalize={autoCapitalize}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={Colors.textSecondary}

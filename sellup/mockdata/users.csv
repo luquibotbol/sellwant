@@ -1,0 +1,4 @@
+id,full_name,email,profile_picture,accepted_payments,created_at
+f03542ca-15b2-4bc9-a2a6-5c0d87735b9e,Alice Smith,alice.smith@example.com,https://example.com/images/alice_smith.jpg,"{Zelle,Venmo,PayPal}",2025-04-08T20:45:57.606712
+42ed57ab-6da0-4691-bfcf-d3b28b24a82e,Bob Johnson,bob.johnson@example.com,https://example.com/images/bob_johnson.jpg,"{Zelle,Venmo,PayPal}",2025-04-08T20:45:57.606742
+d6b674b0-096e-4061-9ac3-0b3388df8ec0,Charlie Davis,charlie.davis@example.com,https://example.com/images/charlie_davis.jpg,"{Zelle,Venmo,PayPal}",2025-04-08T20:45:57.606760
