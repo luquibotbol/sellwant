@@ -53,6 +53,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="feed" options={{ headerShown: false }} />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="profile" options={{ title: 'Profile', headerBackTitle: 'Back' }} />
         <Stack.Screen name="create-event" options={{ title: 'New listing', headerBackTitle: 'Back' }} />
         <Stack.Screen name="event/[id]" options={{ title: 'Listing', headerBackTitle: 'Back' }} />

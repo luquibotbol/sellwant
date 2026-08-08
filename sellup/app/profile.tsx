@@ -14,7 +14,9 @@ import { colors, space, radius, maxContentWidth } from '@/constants/theme';
 import { useAsync } from '@/hooks/useAsync';
 import {
   getMyProfile,
+  getMyContact,
   signOut,
+  updateMyContact,
   updateMyProfile,
   PaymentHandle,
 } from '@/services/data';
@@ -33,12 +35,15 @@ function initials(name: string, email: string) {
 
 export default function ProfileScreen() {
   const profile = useAsync(getMyProfile, []);
+  const myContact = useAsync(getMyContact, []);
   const [kind, setKind] = useState<PaymentHandle['kind']>('venmo');
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [ig, setIg] = useState<string | null>(null);
+  const [savingIg, setSavingIg] = useState(false);
 
-  if (profile.loading) {
+  if (profile.loading || myContact.loading) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator color={colors.mutedForeground} />
@@ -55,7 +60,9 @@ export default function ProfileScreen() {
   if (!profile.data) return <Redirect href="/" />;
 
   const me = profile.data;
-  const handles = me.accepted_payments ?? [];
+  const contact = myContact.data;
+  const igValue = ig ?? me.instagram ?? '';
+  const handles = contact?.accepted_payments ?? [];
   const activeKind = KINDS.find((k) => k.key === kind)!;
 
   const addHandle = async () => {
@@ -66,14 +73,14 @@ export default function ProfileScreen() {
     setSaving(true);
     setSaveError(null);
     try {
-      await updateMyProfile({
+      await updateMyContact({
         accepted_payments: [
           ...handles.filter((h) => h.kind !== kind),
           { kind, value: value.trim() },
         ],
       });
       setValue('');
-      profile.reload();
+      myContact.reload();
     } catch (e: any) {
       setSaveError(e?.message ?? 'Could not save');
     } finally {
@@ -83,10 +90,10 @@ export default function ProfileScreen() {
 
   const removeHandle = async (target: PaymentHandle) => {
     try {
-      await updateMyProfile({
+      await updateMyContact({
         accepted_payments: handles.filter((h) => h.kind !== target.kind),
       });
-      profile.reload();
+      myContact.reload();
     } catch {
       /* surfaced on next load */
     }
@@ -96,12 +103,12 @@ export default function ProfileScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.identity}>
         <View style={styles.avatar}>
-          <Text variant="heading">{initials(me.full_name, me.email)}</Text>
+          <Text variant="heading">{initials(me.full_name, contact?.email ?? '')}</Text>
         </View>
         <View style={styles.identityText}>
           <Text variant="title">{me.full_name || 'No name yet'}</Text>
           <Text variant="small" tone="muted">
-            {me.email}
+            {contact?.email ?? ''}
           </Text>
         </View>
       </View>
@@ -128,6 +135,43 @@ export default function ProfileScreen() {
             member since
           </Text>
         </View>
+      </Card>
+
+      {/* Public, and pushed when missing -- it is the cheapest signal a buyer
+          has that a seller is a real student. */}
+      <Card accent={me.instagram ? 'want' : undefined} style={styles.igCard}>
+        <View style={styles.igHead}>
+          <Text variant="bodyMedium">Instagram</Text>
+          {!me.instagram && <Badge label="RECOMMENDED" variant="want" />}
+        </View>
+        <Text variant="small" tone="muted" style={styles.igBody}>
+          {me.instagram
+            ? 'Shown publicly next to everything you post.'
+            : 'People are far more likely to buy from someone they can see is real. Shown publicly.'}
+        </Text>
+        <Input
+          value={igValue}
+          onChangeText={setIg}
+          placeholder="@yourhandle"
+          autoCapitalize="none"
+          autoCorrect={false}
+          containerStyle={styles.igInput}
+        />
+        <Button
+          title={me.instagram ? 'Update Instagram' : 'Add Instagram'}
+          variant={me.instagram ? 'secondary' : 'want'}
+          block
+          loading={savingIg}
+          onPress={async () => {
+            setSavingIg(true);
+            try {
+              await updateMyProfile({ instagram: igValue.replace(/^@/, '').trim() || null });
+              profile.reload();
+            } finally {
+              setSavingIg(false);
+            }
+          }}
+        />
       </Card>
 
       <Text variant="heading" style={styles.sectionTitle}>
@@ -231,6 +275,10 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', alignItems: 'center', marginTop: space[6] },
   stat: { flex: 1, alignItems: 'center', gap: space[1] },
   statDivider: { width: 1, height: 40, backgroundColor: colors.border },
+  igCard: { marginTop: space[6] },
+  igHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  igBody: { marginTop: space[2], marginBottom: space[4] },
+  igInput: { marginBottom: space[3] },
   sectionTitle: { marginTop: space[8] },
   sectionBody: { marginTop: space[2] },
   handles: { marginTop: space[4], paddingVertical: space[1] },

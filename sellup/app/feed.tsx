@@ -25,6 +25,7 @@ import { colors, space, radius, maxContentWidth } from '@/constants/theme';
 import { useAsync } from '@/hooks/useAsync';
 import {
   getSession,
+  getMyProfile,
   listActive,
   listCategories,
   ListingType,
@@ -76,6 +77,7 @@ export default function FeedScreen() {
   }, [query]);
 
   const session = useAsync(getSession, []);
+  const me = useAsync(getMyProfile, []);
   const categories = useAsync(listCategories, []);
   const listings = useAsync(
     () =>
@@ -89,7 +91,7 @@ export default function FeedScreen() {
 
   const searching = !!debounced || categoryId !== null;
 
-  if (session.loading) {
+  if (session.loading || me.loading) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator color={colors.mutedForeground} />
@@ -97,6 +99,8 @@ export default function FeedScreen() {
     );
   }
   if (!session.data) return <Redirect href="/" />;
+  // Everyone trades under a real name, so the profile has to be finished first.
+  if (me.data && !me.data.onboarded_at) return <Redirect href="/onboarding" />;
 
   return (
     <View style={styles.container}>

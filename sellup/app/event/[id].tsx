@@ -4,7 +4,12 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Text, Card, Badge, Button, Separator, ErrorState, EmptyState } from '@/components/ui';
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { useAsync } from '@/hooks/useAsync';
-import { getListing, getSession, createLockIn } from '@/services/data';
+import {
+  getListing,
+  getSession,
+  createLockIn,
+  getCounterpartyContact,
+} from '@/services/data';
 
 const money = (cents: number) =>
   `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
@@ -15,6 +20,14 @@ export default function ListingDetailScreen() {
   const session = useAsync(getSession, []);
   const [locking, setLocking] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
+
+  // Returns null unless a lock-in already exists between us, so this doubles
+  // as the check for whether the deal is live.
+  const posterId = listing.data?.user_id;
+  const contact = useAsync(
+    async () => (posterId ? getCounterpartyContact(posterId) : null),
+    [posterId]
+  );
 
   if (listing.loading || session.loading) {
     return (
@@ -52,8 +65,10 @@ export default function ListingDetailScreen() {
     setLocking(true);
     try {
       await createLockIn(l);
-      // The handoff flow is the next sub-project; for now confirm and return.
-      router.replace('/feed');
+      // Stay put: the lock-in is what unlocks the counterparty's contact
+      // details, so reloading here is the payoff for the action.
+      contact.reload();
+      listing.reload();
     } catch (e: any) {
       setLockError(e?.message ?? 'Could not lock this in');
     } finally {
@@ -94,10 +109,39 @@ export default function ListingDetailScreen() {
 
       {l.poster && (
         <Card style={styles.poster}>
-          <Text variant="bodyMedium">{l.poster.full_name || 'Someone'}</Text>
+          <View style={styles.posterHead}>
+            <Text variant="bodyMedium">{l.poster.full_name || 'Someone'}</Text>
+            {l.poster.instagram ? (
+              <Badge label={`@${l.poster.instagram}`} variant="outline" />
+            ) : (
+              <Badge label="NO INSTAGRAM" variant="default" />
+            )}
+          </View>
           <Text variant="small" tone="muted" style={styles.posterMeta}>
             {l.poster.completed_deals}{' '}
             {l.poster.completed_deals === 1 ? 'completed handoff' : 'completed handoffs'}
+          </Text>
+        </Card>
+      )}
+
+      {/* Contact appears only after a lock-in exists. The rule is enforced by
+          RLS on contact_details -- this just renders whatever it is allowed
+          to see. */}
+      {contact.data && (
+        <Card accent="want" style={styles.contact}>
+          <Text variant="bodyMedium">You&apos;re locked in — here&apos;s how to reach them</Text>
+          {!!contact.data.phone && (
+            <Text variant="small" style={styles.contactRow}>
+              {contact.data.phone}
+            </Text>
+          )}
+          {contact.data.accepted_payments.map((p) => (
+            <Text key={p.kind} variant="small" tone="muted" style={styles.contactRow}>
+              {p.kind}: {p.value}
+            </Text>
+          ))}
+          <Text variant="caption" tone="subtle" style={styles.contactNote}>
+            Pay them directly. SellUp never handles the money.
           </Text>
         </Card>
       )}
@@ -166,7 +210,11 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: space[3] },
   divider: { marginHorizontal: -space[4] },
   poster: { marginTop: space[3] },
+  posterHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
   posterMeta: { marginTop: space[1] },
+  contact: { marginTop: space[3] },
+  contactRow: { marginTop: space[2] },
+  contactNote: { marginTop: space[3] },
   safety: { marginTop: space[3] },
   safetyBody: { marginTop: space[2] },
   lockError: { marginTop: space[4] },

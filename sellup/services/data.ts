@@ -26,16 +26,33 @@ export interface PaymentHandle {
   label?: string;
 }
 
+/**
+ * Public identity. Everything here is readable by any signed-in user, so
+ * nothing private may be added to this type -- see ContactDetails.
+ */
 export interface Profile {
   id: string;
   full_name: string;
-  email: string;
   profile_picture: string | null;
-  accepted_payments: PaymentHandle[];
+  /** Public on purpose: it can only build trust if buyers can check it
+   *  before committing to a deal. */
+  instagram: string | null;
   /** Observed behaviour, not a rating. Written by trigger, never by a client. */
   completed_deals: number;
   is_suspended: boolean;
+  onboarded_at: string | null;
   created_at: string;
+}
+
+/**
+ * Private. Readable only by the owner and by someone who has a lock-in with
+ * them -- enforced by RLS on contact_details, not by this client.
+ */
+export interface ContactDetails {
+  profile_id: string;
+  phone: string | null;
+  email: string | null;
+  accepted_payments: PaymentHandle[];
 }
 
 export interface Listing {
@@ -67,7 +84,7 @@ export interface LockIn {
 
 /** A listing joined with the profile of whoever posted it. */
 export type ListingWithPoster = Listing & { poster: Pick<Profile,
-  'id' | 'full_name' | 'profile_picture' | 'completed_deals'> | null };
+  'id' | 'full_name' | 'profile_picture' | 'instagram' | 'completed_deals'> | null };
 
 // ---------------------------------------------------------------- auth
 
@@ -123,12 +140,12 @@ export async function getProfile(id: string): Promise<Profile | null> {
   return data as Profile | null;
 }
 
-/** Only these columns are grantable to the client -- `completed_deals` and
- *  `is_suspended` are revoked at the database level on purpose. */
+/** Public fields only. `completed_deals` and `is_suspended` are not
+ *  client-writable, so reputation cannot be self-served. */
 export async function updateMyProfile(patch: {
   full_name?: string;
   profile_picture?: string | null;
-  accepted_payments?: PaymentHandle[];
+  instagram?: string | null;
 }) {
   const session = await getSession();
   if (!session) throw new Error('Not signed in');
@@ -139,10 +156,76 @@ export async function updateMyProfile(patch: {
   if (error) throw error;
 }
 
+// ------------------------------------------------- contact (private)
+
+export async function getMyContact(): Promise<ContactDetails | null> {
+  const session = await getSession();
+  if (!session) return null;
+  const { data, error } = await supabase
+    .from('contact_details')
+    .select('*')
+    .eq('profile_id', session.user.id)
+    .maybeSingle();
+  if (error) throw error;
+  return data as ContactDetails | null;
+}
+
+export async function updateMyContact(patch: {
+  phone?: string | null;
+  accepted_payments?: PaymentHandle[];
+}) {
+  const session = await getSession();
+  if (!session) throw new Error('Not signed in');
+  const { error } = await supabase
+    .from('contact_details')
+    .upsert({ profile_id: session.user.id, ...patch, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+
+/**
+ * The other party's phone and payment handles.
+ *
+ * Returns null unless a lock-in exists between the two of you -- that rule
+ * lives in the RLS policy, so this cannot be bypassed by calling it directly.
+ */
+export async function getCounterpartyContact(
+  profileId: string
+): Promise<ContactDetails | null> {
+  const { data, error } = await supabase
+    .from('contact_details')
+    .select('*')
+    .eq('profile_id', profileId)
+    .maybeSingle();
+  if (error) throw error;
+  return data as ContactDetails | null;
+}
+
+/** Full name and phone are required; Instagram is optional but pushed hard. */
+export async function completeOnboarding(input: {
+  full_name: string;
+  phone: string;
+  instagram?: string | null;
+}) {
+  const session = await getSession();
+  if (!session) throw new Error('Not signed in');
+
+  const { error: pErr } = await supabase
+    .from('profiles')
+    .update({
+      full_name: input.full_name.trim(),
+      instagram: input.instagram?.trim() || null,
+      onboarded_at: new Date().toISOString(),
+    })
+    .eq('id', session.user.id);
+  if (pErr) throw pErr;
+
+  await updateMyContact({ phone: input.phone.trim() });
+}
+
 // ---------------------------------------------------------------- listings
 
 const LISTING_SELECT =
-  '*, poster:profiles!listings_user_id_fkey(id, full_name, profile_picture, completed_deals)';
+  '*, poster:profiles!listings_user_id_fkey(id, full_name, profile_picture, instagram, completed_deals)';
 
 export interface Category {
   id: number;
