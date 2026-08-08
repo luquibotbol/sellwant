@@ -253,6 +253,16 @@ export default function FeedScreen() {
                     {whenAndWhere(item.event_date, item.location) || 'No date set'}
                   </Text>
 
+                  {/* The going rate, not the wish price. On a sell listing
+                      that's the most anyone will pay; on an ask, the least
+                      anyone will take. */}
+                  {item.best_offer_cents != null && (
+                    <Text variant="caption" tone={isSell ? 'sell' : 'want'} style={styles.offerLine}>
+                      {isSell ? 'Top offer' : 'Lowest ask'} {money(item.best_offer_cents)}
+                      {item.offer_count > 1 ? ` · ${item.offer_count} offers` : ''}
+                    </Text>
+                  )}
+
                   {item.poster && (
                     <View style={styles.poster}>
                       <Avatar
@@ -328,6 +338,7 @@ const styles = StyleSheet.create({
   cardSkeleton: { height: 116, borderRadius: radius.xl, marginBottom: space[3] },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { marginTop: space[3] },
+  offerLine: { marginTop: space[2] },
   poster: { flexDirection: 'row', alignItems: 'center', gap: space[2], marginTop: space[3] },
   fab: {
     position: 'absolute',

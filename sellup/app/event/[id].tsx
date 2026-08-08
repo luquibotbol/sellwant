@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Text, Card, Badge, Avatar, Button, Separator, ErrorState, EmptyState } from '@/components/ui';
+import OfferBoard from '@/components/OfferBoard';
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { useAsync } from '@/hooks/useAsync';
 import {
@@ -23,10 +24,16 @@ export default function ListingDetailScreen() {
 
   // Returns null unless a lock-in already exists between us, so this doubles
   // as the check for whether the deal is live.
+  //
+  // Skipped when the listing is your own: RLS quite correctly lets you read
+  // your own contact row, so without this guard your own listing rendered
+  // "You're locked in — here's how to reach them" with your own number.
   const posterId = listing.data?.user_id;
+  const myId = session.data?.user.id ?? null;
   const contact = useAsync(
-    async () => (posterId ? getCounterpartyContact(posterId) : null),
-    [posterId]
+    async () =>
+      posterId && myId && posterId !== myId ? getCounterpartyContact(posterId) : null,
+    [posterId, myId]
   );
 
   if (listing.loading || session.loading) {
@@ -58,7 +65,7 @@ export default function ListingDetailScreen() {
 
   const l = listing.data;
   const selling = l.type === 'sell';
-  const mine = session.data?.user.id === l.user_id;
+  const mine = myId === l.user_id;
 
   const lockIn = async () => {
     setLockError(null);
@@ -148,6 +155,15 @@ export default function ListingDetailScreen() {
           </Text>
         </Card>
       )}
+
+      <OfferBoard
+        listing={l}
+        meId={myId}
+        onSettled={() => {
+          listing.reload();
+          contact.reload();
+        }}
+      />
 
       {/* Bubbl QRs are static -- the seller keeps a working copy after sending
           one. We can guarantee the code is unique here, not that it is safe, so

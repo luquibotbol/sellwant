@@ -69,7 +69,28 @@ export interface Listing {
   event_date: string | null;
   platform: 'bubbl' | null;
   status: ListingStatus;
+  /**
+   * The going rate, maintained by trigger.
+   * On a sell listing this is the HIGHEST anyone will pay; on an ask it is the
+   * LOWEST anyone will take. Null when nobody has offered.
+   */
+  best_offer_cents: number | null;
+  offer_count: number;
   created_at: string;
+}
+
+export type OfferStatus = 'open' | 'withdrawn' | 'accepted' | 'declined';
+
+export interface Offer {
+  id: string;
+  listing_id: string;
+  from_user: string;
+  amount_cents: number;
+  message: string | null;
+  status: OfferStatus;
+  parent_offer_id: string | null;
+  created_at: string;
+  from: Pick<Profile, 'id' | 'full_name' | 'profile_picture' | 'instagram' | 'completed_deals'> | null;
 }
 
 export interface LockIn {
@@ -412,6 +433,74 @@ export async function getLockIn(id: string): Promise<LockIn | null> {
     .maybeSingle();
   if (error) throw error;
   return data as LockIn | null;
+}
+
+// ---------------------------------------------------------------- offers
+
+const OFFER_SELECT =
+  '*, from:profiles!offers_from_user_fkey(id, full_name, profile_picture, instagram, completed_deals)';
+
+/**
+ * Every offer on a listing, best first.
+ *
+ * Sorted by which side of the market it is: on a sell listing the buyer paying
+ * most is at the top, on an ask the seller charging least is.
+ */
+export async function listOffers(
+  listingId: string,
+  type: ListingType
+): Promise<Offer[]> {
+  const { data, error } = await supabase
+    .from('offers')
+    .select(OFFER_SELECT)
+    .eq('listing_id', listingId)
+    .eq('status', 'open')
+    .order('amount_cents', { ascending: type === 'ask' });
+  if (error) throw error;
+  return (data ?? []) as Offer[];
+}
+
+export async function makeOffer(input: {
+  listingId: string;
+  amountCents: number;
+  message?: string;
+  /** Set when answering someone else's offer, so it reads as a counter. */
+  parentOfferId?: string;
+}): Promise<Offer> {
+  const session = await getSession();
+  if (!session) throw new Error('Not signed in');
+  const { data, error } = await supabase
+    .from('offers')
+    .insert({
+      listing_id: input.listingId,
+      from_user: session.user.id,
+      amount_cents: input.amountCents,
+      message: input.message?.trim() || null,
+      parent_offer_id: input.parentOfferId ?? null,
+    })
+    .select(OFFER_SELECT)
+    .single();
+  if (error) throw error;
+  return data as Offer;
+}
+
+export async function withdrawOffer(id: string) {
+  const { error } = await supabase
+    .from('offers')
+    .update({ status: 'withdrawn' })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/**
+ * Settle at the offered price. Creates the lock-in, declines the rest and
+ * takes the listing off the market in one transaction, so two offers can never
+ * both be accepted. Returns the lock-in id.
+ */
+export async function acceptOffer(offerId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('accept_offer', { p_offer_id: offerId });
+  if (error) throw error;
+  return data as string;
 }
 
 export async function myLockIns(): Promise<LockIn[]> {
