@@ -28,7 +28,6 @@ export default function OnboardingScreen() {
 
   const submit = async () => {
     const next: Record<string, string> = {};
-    if (!photo) next.photo = 'Add a photo so people know who they are meeting';
     if (fullName.trim().length < 2) next.fullName = 'Enter your full name';
     else if (!fullName.trim().includes(' ')) next.fullName = 'First and last name, please';
     if (!PHONE_RE.test(phone.trim())) next.phone = 'Enter a phone number people can reach you on';
@@ -64,19 +63,19 @@ export default function OnboardingScreen() {
           to a stranger — knowing who you are is what makes that feel safe.
         </Text>
 
+        {/* Optional, like Instagram -- encouraged with a reason rather than
+            enforced, so a curious student isn't blocked at the door. */}
         <View style={styles.avatarBlock}>
           <AvatarPicker
             uri={photo}
             name={fullName}
             size={104}
-            label="Add your photo"
+            label="Add a photo"
             onUploaded={setPhoto}
           />
-          {!!errors.photo && (
-            <Text variant="caption" tone="destructive" style={styles.photoError}>
-              {errors.photo}
-            </Text>
-          )}
+          <Text variant="caption" tone="subtle" style={styles.photoHint}>
+            Optional — but people are readier to meet someone they can recognise.
+          </Text>
         </View>
 
         <Input
@@ -145,7 +144,7 @@ const styles = StyleSheet.create({
   },
   intro: { marginTop: space[3], marginBottom: space[8], lineHeight: 20 },
   avatarBlock: { alignItems: 'center', marginBottom: space[8] },
-  photoError: { marginTop: space[2], textAlign: 'center' },
+  photoHint: { marginTop: space[2], textAlign: 'center', maxWidth: 260 },
   igCard: { marginBottom: space[6] },
   igHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   igBody: { marginTop: space[2], marginBottom: space[4] },

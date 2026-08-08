@@ -48,13 +48,9 @@ export function AvatarPicker({ uri, name, onUploaded, size = 96, label }: Props)
             <ActivityIndicator color={colors.foreground} />
           </View>
         )}
-        {!shown && !busy && (
-          <View style={[styles.plus, { width: size, height: size }]}>
-            <Text variant="display" tone="muted" style={styles.plusGlyph}>
-              +
-            </Text>
-          </View>
-        )}
+        {/* No "+" overlay: Avatar already renders initials (or "?") in the
+            empty state, and stacking a plus on top of them collided. The
+            "Add a photo" action below is the affordance. */}
       </Pressable>
 
       <Pressable onPress={choose} disabled={busy} hitSlop={8}>
@@ -82,14 +78,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.overlay,
   },
-  plus: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.full,
-  },
-  // The glyph sits high in its line box at display size.
-  plusGlyph: { lineHeight: 40, marginTop: -2 },
   label: { marginTop: space[3] },
   error: { marginTop: space[2], textAlign: 'center' },
 });
