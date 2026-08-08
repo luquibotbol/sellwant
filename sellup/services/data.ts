@@ -150,6 +150,37 @@ export interface Category {
   image_url: string | null;
 }
 
+/**
+ * Places students have already used, most common first.
+ *
+ * Deliberately sourced from our own listings rather than a maps API: the venues
+ * that matter here are "Sig Ep house" and "the annex", which no geocoder knows,
+ * and this costs nothing and needs no API key. A Places provider can be layered
+ * on top later for real addresses.
+ */
+export async function listLocationSuggestions(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('listings')
+    .select('location')
+    .not('location', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) throw error;
+
+  const counts = new Map<string, number>();
+  for (const row of (data ?? []) as { location: string | null }[]) {
+    const name = row.location?.trim();
+    if (!name) continue;
+    // Case-insensitive grouping, but keep the first spelling seen.
+    const key = name.toLowerCase();
+    const existing = [...counts.keys()].find((k) => k.toLowerCase() === key);
+    const label = existing ?? name;
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+}
+
 export async function listCategories(): Promise<Category[]> {
   const { data, error } = await supabase.from('categories').select('*').order('id');
   if (error) throw error;

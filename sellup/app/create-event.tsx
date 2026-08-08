@@ -1,26 +1,37 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { router } from 'expo-router';
-import { Text, Card, Button, Input } from '@/components/ui';
+import { Text, Card, Button, Input, DateField, LocationField } from '@/components/ui';
 import TicketCodeField from '@/components/TicketCodeField';
 import { colors, space, radius, control, maxContentWidth } from '@/constants/theme';
 import { useAsync } from '@/hooks/useAsync';
 import {
   createListing,
   listCategories,
+  listLocationSuggestions,
   registerTicketCode,
   cancelListing,
   ListingType,
 } from '@/services/data';
 
+/** Local date, not toISOString() -- that shifts the day west of UTC. */
+function todayISO() {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export default function CreateListingScreen() {
   const categories = useAsync(listCategories, []);
+  const places = useAsync(listLocationSuggestions, []);
 
   const [type, setType] = useState<ListingType>('sell');
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
   const [location, setLocation] = useState('');
-  const [date, setDate] = useState('');
+  // Most listings are for tonight or this weekend, so today is the right
+  // default -- an empty date field made the common case extra work.
+  const [date, setDate] = useState(todayISO());
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState<number | null>(null);
 
@@ -174,20 +185,18 @@ export default function CreateListingScreen() {
           })}
         </View>
 
-        <Input
-          label="Where"
+        <LocationField
           value={location}
-          onChangeText={setLocation}
-          placeholder="Sig Ep house"
+          onChange={setLocation}
+          suggestions={places.data ?? []}
         />
 
-        <Input
+        <DateField
           label="When"
           value={date}
-          onChangeText={setDate}
-          placeholder="2026-08-08"
+          onChange={setDate}
           error={errors.date}
-          hint="YYYY-MM-DD"
+          min={todayISO()}
         />
 
         <Input

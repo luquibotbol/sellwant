@@ -4,6 +4,8 @@ export { default as Button } from '@/components/ui/Button';
 export { default as Card } from '@/components/ui/Card';
 export { default as Badge } from '@/components/ui/Badge';
 export { default as Input } from '@/components/ui/Input';
+export { default as DateField } from '@/components/ui/DateField';
+export { default as LocationField } from '@/components/ui/LocationField';
 export { Skeleton, Separator, EmptyState, ErrorState } from '@/components/ui/Feedback';
 export type { ButtonVariant, ButtonSize } from '@/components/ui/Button';
 export type { BadgeVariant } from '@/components/ui/Badge';
