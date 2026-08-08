@@ -10,6 +10,7 @@ import {
   Separator,
   ErrorState,
 } from '@/components/ui';
+import AvatarPicker from '@/components/AvatarPicker';
 import { colors, space, radius, maxContentWidth } from '@/constants/theme';
 import { useAsync } from '@/hooks/useAsync';
 import {
@@ -27,11 +28,6 @@ const KINDS: { key: PaymentHandle['kind']; label: string; hint: string }[] = [
   { key: 'zelle', label: 'Zelle', hint: 'phone or email' },
   { key: 'paypal', label: 'PayPal', hint: 'paypal.me/you' },
 ];
-
-function initials(name: string, email: string) {
-  const source = name.trim() || email;
-  return source.slice(0, 2).toUpperCase();
-}
 
 export default function ProfileScreen() {
   const profile = useAsync(getMyProfile, []);
@@ -102,9 +98,15 @@ export default function ProfileScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.identity}>
-        <View style={styles.avatar}>
-          <Text variant="heading">{initials(me.full_name, contact?.email ?? '')}</Text>
-        </View>
+        <AvatarPicker
+          uri={me.profile_picture}
+          name={me.full_name}
+          size={72}
+          onUploaded={async (url) => {
+            await updateMyProfile({ profile_picture: url });
+            profile.reload();
+          }}
+        />
         <View style={styles.identityText}>
           <Text variant="title">{me.full_name || 'No name yet'}</Text>
           <Text variant="small" tone="muted">
@@ -263,13 +265,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   centered: { alignItems: 'center', justifyContent: 'center' },
-  identity: { flexDirection: 'row', alignItems: 'center', gap: space[4] },
-  avatar: {
-    width: 56, height: 56, borderRadius: radius.full,
-    backgroundColor: colors.muted,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: colors.border,
-  },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: space[5] },
   identityText: { flex: 1 },
   suspended: { marginTop: space[4] },
   stats: { flexDirection: 'row', alignItems: 'center', marginTop: space[6] },

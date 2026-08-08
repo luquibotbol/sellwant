@@ -205,6 +205,7 @@ export async function completeOnboarding(input: {
   full_name: string;
   phone: string;
   instagram?: string | null;
+  profile_picture?: string | null;
 }) {
   const session = await getSession();
   if (!session) throw new Error('Not signed in');
@@ -214,6 +215,7 @@ export async function completeOnboarding(input: {
     .update({
       full_name: input.full_name.trim(),
       instagram: input.instagram?.trim() || null,
+      profile_picture: input.profile_picture ?? null,
       onboarded_at: new Date().toISOString(),
     })
     .eq('id', session.user.id);

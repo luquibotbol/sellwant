@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { Text, Card, Badge, Button, Separator, ErrorState, EmptyState } from '@/components/ui';
+import { Text, Card, Badge, Avatar, Button, Separator, ErrorState, EmptyState } from '@/components/ui';
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { useAsync } from '@/hooks/useAsync';
 import {
@@ -110,7 +110,10 @@ export default function ListingDetailScreen() {
       {l.poster && (
         <Card style={styles.poster}>
           <View style={styles.posterHead}>
-            <Text variant="bodyMedium">{l.poster.full_name || 'Someone'}</Text>
+            <View style={styles.posterWho}>
+              <Avatar uri={l.poster.profile_picture} name={l.poster.full_name} size={36} />
+              <Text variant="bodyMedium">{l.poster.full_name || 'Someone'}</Text>
+            </View>
             {l.poster.instagram ? (
               <Badge label={`@${l.poster.instagram}`} variant="outline" />
             ) : (
@@ -211,7 +214,8 @@ const styles = StyleSheet.create({
   divider: { marginHorizontal: -space[4] },
   poster: { marginTop: space[3] },
   posterHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
-  posterMeta: { marginTop: space[1] },
+  posterWho: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
+  posterMeta: { marginTop: space[2] },
   contact: { marginTop: space[3] },
   contactRow: { marginTop: space[2] },
   contactNote: { marginTop: space[3] },

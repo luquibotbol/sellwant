@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { Text, Wordmark, Card, Button, Input, Badge } from '@/components/ui';
+import AvatarPicker from '@/components/AvatarPicker';
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { useAsync } from '@/hooks/useAsync';
 import { getMyProfile, completeOnboarding } from '@/services/data';
@@ -15,6 +16,7 @@ export default function OnboardingScreen() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [instagram, setInstagram] = useState('');
+  const [photo, setPhoto] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -26,6 +28,7 @@ export default function OnboardingScreen() {
 
   const submit = async () => {
     const next: Record<string, string> = {};
+    if (!photo) next.photo = 'Add a photo so people know who they are meeting';
     if (fullName.trim().length < 2) next.fullName = 'Enter your full name';
     else if (!fullName.trim().includes(' ')) next.fullName = 'First and last name, please';
     if (!PHONE_RE.test(phone.trim())) next.phone = 'Enter a phone number people can reach you on';
@@ -39,6 +42,7 @@ export default function OnboardingScreen() {
         full_name: fullName,
         phone,
         instagram: instagram.replace(/^@/, '').trim() || null,
+        profile_picture: photo,
       });
       router.replace('/feed');
     } catch (e: any) {
@@ -56,9 +60,24 @@ export default function OnboardingScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Wordmark size="display" />
         <Text variant="small" tone="muted" style={styles.intro}>
-          Two quick things before you start trading. People are handing money to
-          a stranger — knowing who you are is what makes that feel safe.
+          Set up your profile before you start trading. People are handing money
+          to a stranger — knowing who you are is what makes that feel safe.
         </Text>
+
+        <View style={styles.avatarBlock}>
+          <AvatarPicker
+            uri={photo}
+            name={fullName}
+            size={104}
+            label="Add your photo"
+            onUploaded={setPhoto}
+          />
+          {!!errors.photo && (
+            <Text variant="caption" tone="destructive" style={styles.photoError}>
+              {errors.photo}
+            </Text>
+          )}
+        </View>
 
         <Input
           label="Full name"
@@ -125,6 +144,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   intro: { marginTop: space[3], marginBottom: space[8], lineHeight: 20 },
+  avatarBlock: { alignItems: 'center', marginBottom: space[8] },
+  photoError: { marginTop: space[2], textAlign: 'center' },
   igCard: { marginBottom: space[6] },
   igHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   igBody: { marginTop: space[2], marginBottom: space[4] },

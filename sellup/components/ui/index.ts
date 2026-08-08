@@ -1,5 +1,6 @@
 export { default as Text } from '@/components/ui/Text';
 export { default as Wordmark } from '@/components/ui/Wordmark';
+export { default as Avatar } from '@/components/ui/Avatar';
 export { default as Button } from '@/components/ui/Button';
 export { default as Card } from '@/components/ui/Card';
 export { default as Badge } from '@/components/ui/Badge';

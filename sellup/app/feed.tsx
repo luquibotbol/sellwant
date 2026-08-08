@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Text,
   Wordmark,
+  Avatar,
   Card,
   Badge,
   Input,
@@ -253,10 +254,17 @@ export default function FeedScreen() {
                   </Text>
 
                   {item.poster && (
-                    <Text variant="caption" tone="subtle" style={styles.poster}>
-                      {item.poster.full_name || 'Someone'} · {item.poster.completed_deals}{' '}
-                      {item.poster.completed_deals === 1 ? 'handoff' : 'handoffs'}
-                    </Text>
+                    <View style={styles.poster}>
+                      <Avatar
+                        uri={item.poster.profile_picture}
+                        name={item.poster.full_name}
+                        size={22}
+                      />
+                      <Text variant="caption" tone="subtle">
+                        {item.poster.full_name || 'Someone'} · {item.poster.completed_deals}{' '}
+                        {item.poster.completed_deals === 1 ? 'handoff' : 'handoffs'}
+                      </Text>
+                    </View>
                   )}
                 </Card>
               );
@@ -320,7 +328,7 @@ const styles = StyleSheet.create({
   cardSkeleton: { height: 116, borderRadius: radius.xl, marginBottom: space[3] },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { marginTop: space[3] },
-  poster: { marginTop: space[3] },
+  poster: { flexDirection: 'row', alignItems: 'center', gap: space[2], marginTop: space[3] },
   fab: {
     position: 'absolute',
     right: space[6],
