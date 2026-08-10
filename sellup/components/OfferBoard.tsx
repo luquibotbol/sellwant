@@ -41,6 +41,9 @@ export function OfferBoard({ listing, meId, onSettled }: Props) {
 
   const isOwner = meId === listing.user_id;
   const rows = offers.data ?? [];
+  // One standing offer per person, enforced in the database. Posting again
+  // supersedes the old one, so the form is an edit once you've bid.
+  const myOffer = rows.find((o) => o.from_user === meId) ?? null;
 
   const submit = async () => {
     const cents = Math.round(parseFloat(amount) * 100);
@@ -208,9 +211,14 @@ export function OfferBoard({ listing, meId, onSettled }: Props) {
           label={selling ? "What you'll pay" : "What you'll take"}
           value={amount}
           onChangeText={setAmount}
-          placeholder={String(Math.round(listing.price_cents / 100))}
+          placeholder={String(Math.round((myOffer?.amount_cents ?? listing.price_cents) / 100))}
           keyboardType="numeric"
           error={error ?? undefined}
+          hint={
+            myOffer
+              ? `Replaces your current offer of ${money(myOffer.amount_cents)}.`
+              : undefined
+          }
           containerStyle={styles.amountInput}
         />
         <Input
@@ -220,7 +228,9 @@ export function OfferBoard({ listing, meId, onSettled }: Props) {
           containerStyle={styles.noteInput}
         />
         <Button
-          title={replyTo ? 'Send counter' : 'Make an offer'}
+          title={
+            replyTo ? 'Send counter' : myOffer ? 'Update your offer' : 'Make an offer'
+          }
           onPress={submit}
           loading={busy}
           variant={selling ? 'sell' : 'want'}
