@@ -7,6 +7,21 @@
  */
 import { supabase } from '@/services/supabase';
 
+/**
+ * An expired or revoked token should log you out, not render "something went
+ * wrong". Clearing the session makes onAuthChange fire, and the screens'
+ * existing redirects take it from there.
+ */
+async function fail(error: unknown): Promise<never> {
+  const e = error as { code?: string; status?: number; message?: string };
+  const isAuth =
+    e?.code === 'PGRST301' ||
+    e?.status === 401 ||
+    /jwt|token is expired|invalid claim/i.test(e?.message ?? '');
+  if (isAuth) await supabase.auth.signOut().catch(() => {});
+  throw error;
+}
+
 // ---------------------------------------------------------------- types
 
 export type ListingType = 'ask' | 'sell';
@@ -111,7 +126,7 @@ export type ListingWithPoster = Listing & { poster: Pick<Profile,
 
 export async function getSession() {
   const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
+  if (error) await fail(error);
   return data.session;
 }
 
@@ -129,12 +144,12 @@ export async function signInWithEmail(email: string, redirectTo?: string) {
     email: email.trim().toLowerCase(),
     options: redirectTo ? { emailRedirectTo: redirectTo } : undefined,
   });
-  if (error) throw error;
+  if (error) await fail(error);
 }
 
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
-  if (error) throw error;
+  if (error) await fail(error);
 }
 
 // ---------------------------------------------------------------- profiles
@@ -147,7 +162,7 @@ export async function getMyProfile(): Promise<Profile | null> {
     .select('*')
     .eq('id', session.user.id)
     .maybeSingle();
-  if (error) throw error;
+  if (error) await fail(error);
   return data as Profile | null;
 }
 
@@ -157,7 +172,7 @@ export async function getProfile(id: string): Promise<Profile | null> {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (error) throw error;
+  if (error) await fail(error);
   return data as Profile | null;
 }
 
@@ -174,7 +189,7 @@ export async function updateMyProfile(patch: {
     .from('profiles')
     .update(patch)
     .eq('id', session.user.id);
-  if (error) throw error;
+  if (error) await fail(error);
 }
 
 // ------------------------------------------------- contact (private)
@@ -187,7 +202,7 @@ export async function getMyContact(): Promise<ContactDetails | null> {
     .select('*')
     .eq('profile_id', session.user.id)
     .maybeSingle();
-  if (error) throw error;
+  if (error) await fail(error);
   return data as ContactDetails | null;
 }
 
@@ -200,7 +215,7 @@ export async function updateMyContact(patch: {
   const { error } = await supabase
     .from('contact_details')
     .upsert({ profile_id: session.user.id, ...patch, updated_at: new Date().toISOString() });
-  if (error) throw error;
+  if (error) await fail(error);
 }
 
 /**
@@ -217,7 +232,7 @@ export async function getCounterpartyContact(
     .select('*')
     .eq('profile_id', profileId)
     .maybeSingle();
-  if (error) throw error;
+  if (error) await fail(error);
   return data as ContactDetails | null;
 }
 
@@ -271,7 +286,7 @@ export async function listLocationSuggestions(): Promise<string[]> {
     .not('location', 'is', null)
     .order('created_at', { ascending: false })
     .limit(500);
-  if (error) throw error;
+  if (error) await fail(error);
 
   const counts = new Map<string, number>();
   for (const row of (data ?? []) as { location: string | null }[]) {
@@ -289,7 +304,7 @@ export async function listLocationSuggestions(): Promise<string[]> {
 
 export async function listCategories(): Promise<Category[]> {
   const { data, error } = await supabase.from('categories').select('*').order('id');
-  if (error) throw error;
+  if (error) await fail(error);
   return (data ?? []) as Category[];
 }
 
@@ -325,7 +340,7 @@ export async function listActive(
   }
 
   const { data, error } = await query;
-  if (error) throw error;
+  if (error) await fail(error);
   return (data ?? []) as ListingWithPoster[];
 }
 
@@ -335,7 +350,7 @@ export async function getListing(id: string): Promise<ListingWithPoster | null> 
     .select(LISTING_SELECT)
     .eq('id', id)
     .maybeSingle();
-  if (error) throw error;
+  if (error) await fail(error);
   return data as ListingWithPoster | null;
 }
 
@@ -361,7 +376,7 @@ export async function createListing(input: {
     })
     .select()
     .single();
-  if (error) throw error;
+  if (error) await fail(error);
   return data as Listing;
 }
 
@@ -385,7 +400,7 @@ export async function registerTicketCode(
     p_listing_id: listingId,
     p_code_hash: codeHash,
   });
-  if (error) throw error;
+  if (error) await fail(error);
   const result = data as { ok: boolean; same_seller?: boolean };
   return result.ok ? { ok: true } : { ok: false, sameSeller: !!result.same_seller };
 }
@@ -395,7 +410,7 @@ export async function cancelListing(id: string) {
     .from('listings')
     .update({ status: 'cancelled' })
     .eq('id', id);
-  if (error) throw error;
+  if (error) await fail(error);
 }
 
 // ---------------------------------------------------------------- lock-ins
@@ -421,7 +436,7 @@ export async function createLockIn(listing: Listing): Promise<LockIn> {
     })
     .select()
     .single();
-  if (error) throw error;
+  if (error) await fail(error);
   return data as LockIn;
 }
 
@@ -431,7 +446,7 @@ export async function getLockIn(id: string): Promise<LockIn | null> {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (error) throw error;
+  if (error) await fail(error);
   return data as LockIn | null;
 }
 
@@ -456,7 +471,7 @@ export async function listOffers(
     .eq('listing_id', listingId)
     .eq('status', 'open')
     .order('amount_cents', { ascending: type === 'ask' });
-  if (error) throw error;
+  if (error) await fail(error);
   return (data ?? []) as Offer[];
 }
 
@@ -480,7 +495,7 @@ export async function makeOffer(input: {
     })
     .select(OFFER_SELECT)
     .single();
-  if (error) throw error;
+  if (error) await fail(error);
   return data as Offer;
 }
 
@@ -489,7 +504,7 @@ export async function withdrawOffer(id: string) {
     .from('offers')
     .update({ status: 'withdrawn' })
     .eq('id', id);
-  if (error) throw error;
+  if (error) await fail(error);
 }
 
 /**
@@ -499,7 +514,7 @@ export async function withdrawOffer(id: string) {
  */
 export async function acceptOffer(offerId: string): Promise<string> {
   const { data, error } = await supabase.rpc('accept_offer', { p_offer_id: offerId });
-  if (error) throw error;
+  if (error) await fail(error);
   return data as string;
 }
 
@@ -508,6 +523,6 @@ export async function myLockIns(): Promise<LockIn[]> {
     .from('lock_ins')
     .select('*')
     .order('locked_at', { ascending: false });
-  if (error) throw error;
+  if (error) await fail(error);
   return (data ?? []) as LockIn[];
 }
