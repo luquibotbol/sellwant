@@ -1,0 +1,253 @@
+import React, { useState } from 'react';
+import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { Redirect, router } from 'expo-router';
+import {
+  Text,
+  Card,
+  Badge,
+  Avatar,
+  Button,
+  EmptyState,
+  ErrorState,
+} from '@/components/ui';
+import { colors, space, radius, maxContentWidth } from '@/constants/theme';
+import { useAsync } from '@/hooks/useAsync';
+import { useSession } from '@/hooks/useSession';
+import {
+  myOffers,
+  offersOnMyListings,
+  acceptOffer,
+  declineOffer,
+  withdrawOffer,
+  OfferWithListing,
+} from '@/services/data';
+
+const money = (cents: number) =>
+  `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+
+type Tab = 'received' | 'sent';
+
+const STATUS_VARIANT: Record<string, 'default' | 'want' | 'destructive' | 'outline'> = {
+  open: 'outline',
+  accepted: 'want',
+  declined: 'destructive',
+  withdrawn: 'default',
+};
+
+export default function OffersScreen() {
+  const session = useSession();
+  const [tab, setTab] = useState<Tab>('received');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const received = useAsync(offersOnMyListings, []);
+  const sent = useAsync(myOffers, []);
+
+  if (session === undefined) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator color={colors.mutedForeground} />
+      </View>
+    );
+  }
+  if (!session) return <Redirect href="/" />;
+
+  const active = tab === 'received' ? received : sent;
+  const rows = active.data ?? [];
+  const openReceived = (received.data ?? []).filter((o) => o.status === 'open').length;
+
+  const run = async (id: string, fn: () => Promise<unknown>) => {
+    setBusy(id);
+    setError(null);
+    try {
+      await fn();
+      received.reload();
+      sent.reload();
+    } catch (e: any) {
+      setError(e?.message ?? 'That did not work');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.frame}>
+        <View style={styles.tabs}>
+          {(['received', 'sent'] as Tab[]).map((t) => {
+            const on = tab === t;
+            return (
+              <Pressable
+                key={t}
+                onPress={() => setTab(t)}
+                style={[styles.tab, on && styles.tabActive]}
+              >
+                <Text variant={on ? 'bodyMedium' : 'body'} tone={on ? 'default' : 'muted'}>
+                  {t === 'received'
+                    ? `On your listings${openReceived ? ` (${openReceived})` : ''}`
+                    : 'Your offers'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {!!error && (
+          <Text variant="small" tone="destructive" style={styles.error}>
+            {error}
+          </Text>
+        )}
+
+        {active.error ? (
+          <ErrorState message={active.error.message} onRetry={active.reload} />
+        ) : active.loading && !active.data ? (
+          <View style={styles.centered}>
+            <ActivityIndicator color={colors.mutedForeground} />
+          </View>
+        ) : rows.length === 0 ? (
+          <EmptyState
+            title={tab === 'received' ? 'No offers yet' : "You haven't offered on anything"}
+            body={
+              tab === 'received'
+                ? 'When someone offers on something you posted, it shows up here.'
+                : 'Find a ticket and name your price — offers are public, so everyone can see the going rate.'
+            }
+            actionLabel="Browse listings"
+            onAction={() => router.push('/feed')}
+          />
+        ) : (
+          <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+            {rows.map((o: OfferWithListing) => {
+              const selling = o.listing?.type === 'sell';
+              const isOpen = o.status === 'open';
+              const working = busy === o.id;
+
+              return (
+                <Card
+                  key={o.id}
+                  accent={selling ? 'sell' : 'want'}
+                  style={styles.card}
+                  onPress={
+                    o.listing ? () => router.push(`/event/${o.listing!.id}` as never) : undefined
+                  }
+                >
+                  <View style={styles.cardTop}>
+                    <Text variant="bodyMedium" style={styles.cardTitle} numberOfLines={1}>
+                      {o.listing?.title ?? 'Listing removed'}
+                    </Text>
+                    <Text variant="heading" tone={selling ? 'sell' : 'want'}>
+                      {money(o.amount_cents)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.metaRow}>
+                    {tab === 'received' ? (
+                      <View style={styles.who}>
+                        <Avatar uri={o.from?.profile_picture} name={o.from?.full_name} size={20} />
+                        <Text variant="small" tone="muted">
+                          {o.from?.full_name || 'Someone'}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text variant="small" tone="muted">
+                        {o.listing ? `Listed at ${money(o.listing.price_cents)}` : ''}
+                      </Text>
+                    )}
+                    <Badge
+                      label={o.status.toUpperCase()}
+                      variant={STATUS_VARIANT[o.status] ?? 'default'}
+                    />
+                  </View>
+
+                  {!!o.message && (
+                    <Text variant="small" tone="muted" style={styles.note}>
+                      “{o.message}”
+                    </Text>
+                  )}
+
+                  {/* A counter is an offer with a parent, so say so rather than
+                      leaving it indistinguishable from an opening bid. */}
+                  {!!o.parent_offer_id && (
+                    <Text variant="caption" tone="subtle" style={styles.note}>
+                      Counter-offer
+                    </Text>
+                  )}
+
+                  {isOpen && (
+                    <View style={styles.actions}>
+                      {tab === 'received' ? (
+                        <>
+                          <Button
+                            title="Accept"
+                            variant="want"
+                            size="sm"
+                            loading={working}
+                            onPress={() => run(o.id, () => acceptOffer(o.id))}
+                          />
+                          <Button
+                            title="Decline"
+                            variant="outline"
+                            size="sm"
+                            onPress={() => run(o.id, () => declineOffer(o.id))}
+                          />
+                          <Button
+                            title="Counter"
+                            variant="ghost"
+                            size="sm"
+                            onPress={() =>
+                              o.listing && router.push(`/event/${o.listing.id}` as never)
+                            }
+                          />
+                        </>
+                      ) : (
+                        <Button
+                          title="Withdraw"
+                          variant="outline"
+                          size="sm"
+                          loading={working}
+                          onPress={() => run(o.id, () => withdrawOffer(o.id))}
+                        />
+                      )}
+                    </View>
+                  )}
+                </Card>
+              );
+            })}
+          </ScrollView>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  frame: { flex: 1, width: '100%', maxWidth: maxContentWidth, alignSelf: 'center' },
+  centered: { alignItems: 'center', justifyContent: 'center', flexGrow: 1, padding: space[6] },
+  tabs: {
+    flexDirection: 'row',
+    margin: space[5],
+    padding: 3,
+    gap: 2,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+  },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: space[2], borderRadius: radius.md },
+  tabActive: { backgroundColor: colors.muted },
+  error: { marginHorizontal: space[5], marginBottom: space[3] },
+  list: { paddingHorizontal: space[5], paddingBottom: space[16] },
+  card: { marginBottom: space[3] },
+  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[3] },
+  cardTitle: { flex: 1 },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: space[3],
+  },
+  who: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
+  note: { marginTop: space[2] },
+  actions: { flexDirection: 'row', gap: space[2], marginTop: space[4] },
+});

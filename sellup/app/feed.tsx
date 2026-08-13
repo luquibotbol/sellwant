@@ -108,11 +108,18 @@ export default function FeedScreen() {
       <View style={styles.frame}>
         <View style={[styles.header, { paddingTop: insets.top + space[4] }]}>
           <Wordmark size="title" />
-          <Pressable onPress={() => router.push('/profile')} hitSlop={8}>
-            <Text variant="small" tone="muted">
-              Profile
-            </Text>
-          </Pressable>
+          <View style={styles.headerLinks}>
+            <Pressable onPress={() => router.push('/offers')} hitSlop={8}>
+              <Text variant="small" tone="muted">
+                Offers
+              </Text>
+            </Pressable>
+            <Pressable onPress={() => router.push('/profile')} hitSlop={8}>
+              <Text variant="small" tone="muted">
+                Profile
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         <Input
@@ -306,6 +313,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[5],
     paddingBottom: space[4],
   },
+  headerLinks: { flexDirection: 'row', gap: space[4] },
   search: { marginHorizontal: space[5], marginBottom: space[3] },
   categoriesScroll: { flexGrow: 0, flexShrink: 0 },
   categories: { paddingHorizontal: space[5], gap: space[5], paddingBottom: space[3] },

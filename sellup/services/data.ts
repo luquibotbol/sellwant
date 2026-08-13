@@ -499,6 +499,62 @@ export async function makeOffer(input: {
   return data as Offer;
 }
 
+const openFirst = (rows: OfferWithListing[]) =>
+  [...rows].sort((a, b) => Number(b.status === 'open') - Number(a.status === 'open'));
+
+/** An offer carrying the listing it belongs to, for the offers inbox. */
+export type OfferWithListing = Offer & {
+  listing: Pick<Listing, 'id' | 'title' | 'type' | 'price_cents' | 'status' | 'event_date' | 'location' | 'user_id'> | null;
+};
+
+const OFFER_WITH_LISTING =
+  '*, from:profiles!offers_from_user_fkey(id, full_name, profile_picture, instagram, completed_deals),' +
+  ' listing:listings(id, title, type, price_cents, status, event_date, location, user_id)';
+
+/**
+ * Offers you have made.
+ *
+ * Withdrawn offers are hidden: superseding your own bid marks the old row
+ * withdrawn, so showing them would bury the live offer under your own history.
+ * Open ones float to the top -- they are the only actionable rows.
+ */
+export async function myOffers(): Promise<OfferWithListing[]> {
+  const session = await getSession();
+  if (!session) return [];
+  const { data, error } = await supabase
+    .from('offers')
+    .select(OFFER_WITH_LISTING)
+    .eq('from_user', session.user.id)
+    .neq('status', 'withdrawn')
+    .order('created_at', { ascending: false });
+  if (error) await fail(error);
+  return openFirst((data ?? []) as unknown as OfferWithListing[]);
+}
+
+/**
+ * Offers other people have made on your listings.
+ * `!inner` makes the embedded listing a join rather than a left join, so the
+ * user_id filter actually restricts rows.
+ */
+export async function offersOnMyListings(): Promise<OfferWithListing[]> {
+  const session = await getSession();
+  if (!session) return [];
+  const { data, error } = await supabase
+    .from('offers')
+    .select(OFFER_WITH_LISTING.replace('listing:listings(', 'listing:listings!inner('))
+    .eq('listing.user_id', session.user.id)
+    .neq('from_user', session.user.id)
+    .neq('status', 'withdrawn')
+    .order('created_at', { ascending: false });
+  if (error) await fail(error);
+  return openFirst((data ?? []) as unknown as OfferWithListing[]);
+}
+
+export async function declineOffer(id: string) {
+  const { error } = await supabase.from('offers').update({ status: 'declined' }).eq('id', id);
+  if (error) await fail(error);
+}
+
 export async function withdrawOffer(id: string) {
   const { error } = await supabase
     .from('offers')
