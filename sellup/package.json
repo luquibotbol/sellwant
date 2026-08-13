@@ -10,7 +10,8 @@
     "test": "bun scripts/test-normalise.ts && bun scripts/make-test-qrs.ts >/dev/null && bun scripts/test-decode.ts",
     "test:decode": "bun scripts/test-decode.ts",
     "start-web": "expo start --web --tunnel",
-    "start-web-dev": "DEBUG=expo* expo start --web --tunnel"
+    "start-web-dev": "DEBUG=expo* expo start --web --tunnel",
+    "serve:local": "expo export -p web && python3 scripts/serve-local.py"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",
