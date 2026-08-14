@@ -19,6 +19,7 @@ import { openPayment } from '@/lib/open-payment';
 import { stepFor, PROGRESS, HandoffState, Role } from '@/lib/handoff';
 import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
+import ReportSheet from '@/components/ReportSheet';
 import {
   getDeal,
   advanceDeal,
@@ -45,6 +46,7 @@ export default function DealScreen() {
   const [error, setError] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [reporting, setReporting] = useState(false);
 
   if (session === undefined || deal.loading) {
     return (
@@ -295,6 +297,27 @@ export default function DealScreen() {
         </Card>
       )}
 
+      {/* Anchored to this deal, so a moderator sees the transaction. */}
+      {otherId && (
+        <>
+          <Button
+            title="Something went wrong — report this"
+            variant="ghost"
+            block
+            onPress={() => setReporting(true)}
+            style={styles.report}
+          />
+          <ReportSheet
+            visible={reporting}
+            onClose={() => setReporting(false)}
+            subjectId={otherId}
+            subjectName={other?.full_name || 'them'}
+            listingId={d.listing?.id}
+            lockInId={d.id}
+          />
+        </>
+      )}
+
       {selling && state !== 'confirmed' && state !== 'cancelled' && (
         <Card style={styles.safety}>
           <Text variant="bodyMedium">Meet at the door if you can</Text>
@@ -346,4 +369,5 @@ const styles = StyleSheet.create({
   payRow: { marginTop: space[3] },
   payHint: { marginTop: space[2] },
   safety: { marginTop: space[3] },
+  report: { marginTop: space[5] },
 });

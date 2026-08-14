@@ -671,6 +671,48 @@ export async function advanceDeal(
   return data as LockIn;
 }
 
+// ---------------------------------------------------------------- reports
+
+/**
+ * File a private report about someone.
+ *
+ * Free-text on purpose. Offering a list of accusation categories would make
+ * SellUp a co-author of the accusation rather than a conduit for it, which is
+ * the distinction Section 230 turns on. Reports are never shown publicly and
+ * never shown to their subject.
+ */
+export async function fileReport(input: {
+  subjectId: string;
+  body: string;
+  listingId?: string;
+  lockInId?: string;
+}): Promise<void> {
+  const session = await getSession();
+  if (!session) throw new Error('Not signed in');
+  if (input.subjectId === session.user.id) throw new Error('You cannot report yourself');
+
+  const { error } = await supabase.from('reports').insert({
+    reporter_id: session.user.id,
+    subject_id: input.subjectId,
+    listing_id: input.listingId ?? null,
+    lock_in_id: input.lockInId ?? null,
+    body: input.body.trim(),
+  });
+  if (error) await fail(error);
+}
+
+/** Reports YOU filed. RLS makes it impossible to read anyone else's. */
+export async function myReports(): Promise<
+  { id: string; subject_id: string; body: string; created_at: string; outcome: string | null }[]
+> {
+  const { data, error } = await supabase
+    .from('reports')
+    .select('id, subject_id, body, created_at, outcome')
+    .order('created_at', { ascending: false });
+  if (error) await fail(error);
+  return (data ?? []) as never;
+}
+
 export async function myLockIns(): Promise<LockIn[]> {
   const { data, error } = await supabase
     .from('lock_ins')

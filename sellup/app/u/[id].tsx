@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import {
@@ -6,6 +6,7 @@ import {
   Card,
   Badge,
   Avatar,
+  Button,
   Separator,
   EmptyState,
   ErrorState,
@@ -13,6 +14,8 @@ import {
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { money, whenAndWhere } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
+import { useSession } from '@/hooks/useSession';
+import ReportSheet from '@/components/ReportSheet';
 import { getPublicProfile, listingsBy, ListingWithPoster } from '@/services/data';
 
 /**
@@ -25,6 +28,8 @@ import { getPublicProfile, listingsBy, ListingWithPoster } from '@/services/data
  */
 export default function PublicProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const session = useSession();
+  const [reporting, setReporting] = useState(false);
   const profile = useAsync(() => getPublicProfile(id), [id]);
   const listings = useAsync(() => listingsBy(id), [id]);
 
@@ -136,6 +141,25 @@ export default function PublicProfileScreen() {
           </Card>
         );
       })}
+
+      {/* Reporting is available from a profile, but never on yourself. */}
+      {session && session.user.id !== p.id && (
+        <>
+          <Button
+            title={`Report ${p.full_name || 'this person'}`}
+            variant="ghost"
+            block
+            onPress={() => setReporting(true)}
+            style={styles.report}
+          />
+          <ReportSheet
+            visible={reporting}
+            onClose={() => setReporting(false)}
+            subjectId={p.id}
+            subjectName={p.full_name || 'this person'}
+          />
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -163,4 +187,5 @@ const styles = StyleSheet.create({
   card: { marginBottom: space[3] },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { marginTop: space[3] },
+  report: { marginTop: space[6] },
 });
