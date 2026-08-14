@@ -57,6 +57,8 @@ export default function RootLayout() {
         <Stack.Screen name="deal/[id]" options={{ title: 'Handoff', headerBackTitle: 'Back' }} />
         <Stack.Screen name="deals" options={{ title: 'Your deals', headerBackTitle: 'Back' }} />
         <Stack.Screen name="offers" options={{ title: 'Offers', headerBackTitle: 'Back' }} />
+        <Stack.Screen name="my-listings" options={{ title: 'Your listings', headerBackTitle: 'Back' }} />
+        <Stack.Screen name="u/[id]" options={{ title: 'Profile', headerBackTitle: 'Back' }} />
         <Stack.Screen name="profile" options={{ title: 'Profile', headerBackTitle: 'Back' }} />
         <Stack.Screen name="create-event" options={{ title: 'New listing', headerBackTitle: 'Back' }} />
         <Stack.Screen name="event/[id]" options={{ title: 'Listing', headerBackTitle: 'Back' }} />

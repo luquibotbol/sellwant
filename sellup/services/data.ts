@@ -354,6 +354,36 @@ export async function getListing(id: string): Promise<ListingWithPoster | null> 
   return data as ListingWithPoster | null;
 }
 
+/** Everything you've posted, any status, newest first. */
+export async function myListings(): Promise<ListingWithPoster[]> {
+  const session = await getSession();
+  if (!session) return [];
+  const { data, error } = await supabase
+    .from('listings')
+    .select(LISTING_SELECT)
+    .eq('user_id', session.user.id)
+    .order('created_at', { ascending: false });
+  if (error) await fail(error);
+  return (data ?? []) as ListingWithPoster[];
+}
+
+/** Someone else's public identity. Contact details are never included. */
+export async function getPublicProfile(id: string): Promise<Profile | null> {
+  return getProfile(id);
+}
+
+/** A person's active listings, for their public profile. */
+export async function listingsBy(userId: string): Promise<ListingWithPoster[]> {
+  const { data, error } = await supabase
+    .from('listings')
+    .select(LISTING_SELECT)
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('event_date', { ascending: true, nullsFirst: false });
+  if (error) await fail(error);
+  return (data ?? []) as ListingWithPoster[];
+}
+
 export async function createListing(input: {
   type: ListingType;
   title: string;

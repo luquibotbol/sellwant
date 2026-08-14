@@ -112,7 +112,7 @@ export default function ListingDetailScreen() {
       </Card>
 
       {l.poster && (
-        <Card style={styles.poster}>
+        <Card style={styles.poster} onPress={() => router.push(`/u/${l.user_id}` as never)}>
           <View style={styles.posterHead}>
             <View style={styles.posterWho}>
               <Avatar uri={l.poster.profile_picture} name={l.poster.full_name} size={36} />

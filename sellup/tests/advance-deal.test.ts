@@ -21,6 +21,12 @@ const PASSWORD = 'sellup-dev-only';
 let buyerTok = '';
 let sellerTok = '';
 const madeListings: string[] = [];
+/**
+ * Reputation is a trigger side effect, and deleting the listing afterwards
+ * does NOT decrement it -- so without restoring these, every test run
+ * permanently inflates both profiles in the shared dev database.
+ */
+let baseline: Record<string, number> = {};
 
 async function signIn(email: string): Promise<string> {
   const r = await fetch(`${URL}/auth/v1/token?grant_type=password`, {
@@ -96,6 +102,10 @@ beforeAll(async () => {
   if (!URL || !KEY) throw new Error('Missing EXPO_PUBLIC_SUPABASE_* — run via `bun run test`');
   buyerTok = await signIn(BUYER.email);
   sellerTok = await signIn(SELLER.email);
+  baseline = {
+    [BUYER.id]: await dealsCount(BUYER.id),
+    [SELLER.id]: await dealsCount(SELLER.id),
+  };
 });
 
 afterAll(async () => {
@@ -103,6 +113,14 @@ afterAll(async () => {
   for (const id of madeListings) {
     await rest(sellerTok, `listings?id=eq.${id}`, { method: 'DELETE' });
   }
+  // completed_deals is not client-writable by design, so the restore goes
+  // through the same admin path the trigger uses. Without it the counters
+  // ratchet up forever and the number stops meaning anything.
+  await fetch(`${URL}/rest/v1/rpc/reset_completed_deals`, {
+    method: 'POST',
+    headers: hdrs(buyerTok),
+    body: JSON.stringify({ p_counts: baseline }),
+  });
 });
 
 describe('advance_deal — who may do what', () => {

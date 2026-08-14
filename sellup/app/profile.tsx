@@ -242,6 +242,14 @@ export default function ProfileScreen() {
       </Card>
 
       <Button
+        title="Your listings"
+        variant="secondary"
+        block
+        style={styles.signOut}
+        onPress={() => router.push('/my-listings')}
+      />
+
+      <Button
         title="Sign out"
         variant="outline"
         block
