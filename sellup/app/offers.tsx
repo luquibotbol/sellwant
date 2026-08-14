@@ -11,6 +11,7 @@ import {
   ErrorState,
 } from '@/components/ui';
 import { colors, space, radius, maxContentWidth } from '@/constants/theme';
+import { money } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
 import {
@@ -21,9 +22,6 @@ import {
   withdrawOffer,
   OfferWithListing,
 } from '@/services/data';
-
-const money = (cents: number) =>
-  `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 
 type Tab = 'received' | 'sent';
 

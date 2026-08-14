@@ -23,6 +23,7 @@ import {
   ErrorState,
 } from '@/components/ui';
 import { colors, space, radius, maxContentWidth } from '@/constants/theme';
+import { money, whenAndWhere } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
 import {
@@ -40,27 +41,6 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'sell', label: 'For sale' },
   { key: 'ask', label: 'Wanted' },
 ];
-
-const money = (cents: number) =>
-  `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
-
-/** "Fri · Sig Ep house" rather than an ISO date. */
-function whenAndWhere(date: string | null, location: string | null) {
-  const parts: string[] = [];
-  if (date) {
-    const d = new Date(`${date}T00:00:00`);
-    const today = new Date();
-    const days = Math.round((d.getTime() - new Date(today.toDateString()).getTime()) / 86400000);
-    parts.push(
-      days === 0 ? 'Tonight'
-      : days === 1 ? 'Tomorrow'
-      : days > 1 && days < 7 ? d.toLocaleDateString(undefined, { weekday: 'long' })
-      : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    );
-  }
-  if (location) parts.push(location);
-  return parts.join(' · ');
-}
 
 export default function FeedScreen() {
   // Real insets rather than a hardcoded top pad -- with viewport-fit=cover the

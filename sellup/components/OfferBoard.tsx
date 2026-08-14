@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Text, Card, Avatar, Button, Input, Separator } from '@/components/ui';
 import { colors, space, radius } from '@/constants/theme';
+import { money } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
 import {
   listOffers,
@@ -11,9 +12,6 @@ import {
   Listing,
   Offer,
 } from '@/services/data';
-
-const money = (cents: number) =>
-  `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 
 interface Props {
   listing: Listing;

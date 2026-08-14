@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Text, Card, Button, Input, DateField, LocationField } from '@/components/ui';
 import TicketCodeField from '@/components/TicketCodeField';
 import { colors, space, radius, control, maxContentWidth } from '@/constants/theme';
+import { todayISO } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
 import {
   createListing,
@@ -14,12 +15,6 @@ import {
   ListingType,
 } from '@/services/data';
 
-/** Local date, not toISOString() -- that shifts the day west of UTC. */
-function todayISO() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
 
 export default function CreateListingScreen() {
   const categories = useAsync(listCategories, []);

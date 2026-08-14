@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Pressable, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Text from '@/components/ui/Text';
+import { toISODate, fromISODate } from '@/lib/format';
 import Button from '@/components/ui/Button';
 import { colors, radius, space, control } from '@/constants/theme';
 
@@ -15,16 +16,6 @@ export interface DateFieldProps {
   min?: string;
 }
 
-/** Local-time ISO date. toISOString() would shift the day for anyone west of UTC. */
-function toISODate(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function fromISODate(s: string): Date {
-  const [y, m, d] = s.split('-').map(Number);
-  return y && m && d ? new Date(y, m - 1, d) : new Date();
-}
 
 function pretty(s: string) {
   if (!s) return 'Choose a date';

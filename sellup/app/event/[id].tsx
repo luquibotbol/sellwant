@@ -4,6 +4,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Text, Card, Badge, Avatar, Button, Separator, ErrorState, EmptyState } from '@/components/ui';
 import OfferBoard from '@/components/OfferBoard';
 import { colors, space, maxContentWidth } from '@/constants/theme';
+import { money } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
 import {
   getListing,
@@ -11,9 +12,6 @@ import {
   createLockIn,
   getCounterpartyContact,
 } from '@/services/data';
-
-const money = (cents: number) =>
-  `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
