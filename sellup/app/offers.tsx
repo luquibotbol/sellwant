@@ -180,7 +180,15 @@ export default function OffersScreen() {
                             variant="want"
                             size="sm"
                             loading={working}
-                            onPress={() => run(o.id, () => acceptOffer(o.id))}
+                            onPress={() =>
+                              run(o.id, async () => {
+                                // acceptOffer returns the new lock-in id -- go
+                                // straight to the handoff, which is the whole
+                                // point of accepting.
+                                const dealId = await acceptOffer(o.id);
+                                router.push(`/deal/${dealId}` as never);
+                              })
+                            }
                           />
                           <Button
                             title="Decline"

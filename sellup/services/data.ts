@@ -574,6 +574,73 @@ export async function acceptOffer(offerId: string): Promise<string> {
   return data as string;
 }
 
+// ---------------------------------------------------------------- deals
+
+/** A deal with everything the handoff screen needs, in one round trip. */
+export type DealWithContext = LockIn & {
+  listing: Pick<
+    Listing,
+    'id' | 'title' | 'type' | 'price_cents' | 'event_date' | 'location' | 'platform' | 'status'
+  > | null;
+  buyer: Pick<Profile, 'id' | 'full_name' | 'profile_picture' | 'instagram' | 'completed_deals'> | null;
+  seller: Pick<Profile, 'id' | 'full_name' | 'profile_picture' | 'instagram' | 'completed_deals'> | null;
+};
+
+const DEAL_SELECT =
+  '*, listing:listings(id, title, type, price_cents, event_date, location, platform, status),' +
+  ' buyer:profiles!lock_ins_buyer_id_fkey(id, full_name, profile_picture, instagram, completed_deals),' +
+  ' seller:profiles!lock_ins_seller_id_fkey(id, full_name, profile_picture, instagram, completed_deals)';
+
+/** RLS restricts this to the two parties, so a stranger gets null, not a 403. */
+export async function getDeal(id: string): Promise<DealWithContext | null> {
+  const { data, error } = await supabase
+    .from('lock_ins')
+    .select(DEAL_SELECT)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) await fail(error);
+  return data as unknown as DealWithContext | null;
+}
+
+export async function myDeals(): Promise<DealWithContext[]> {
+  const { data, error } = await supabase
+    .from('lock_ins')
+    .select(DEAL_SELECT)
+    .order('locked_at', { ascending: false });
+  if (error) await fail(error);
+  return (data ?? []) as unknown as DealWithContext[];
+}
+
+/** The deal for a listing, if one exists and you're party to it. */
+export async function getDealForListing(listingId: string): Promise<DealWithContext | null> {
+  const { data, error } = await supabase
+    .from('lock_ins')
+    .select(DEAL_SELECT)
+    .eq('listing_id', listingId)
+    .neq('state', 'cancelled')
+    .maybeSingle();
+  if (error) await fail(error);
+  return data as unknown as DealWithContext | null;
+}
+
+/**
+ * The only way a deal moves. Role and sequence are enforced by the RPC, not
+ * here -- this just surfaces whatever the database decides.
+ *
+ * Idempotent server-side: re-sending the current state succeeds silently.
+ */
+export async function advanceDeal(
+  id: string,
+  to: Exclude<LockInState, 'code_released'>
+): Promise<LockIn> {
+  const { data, error } = await supabase.rpc('advance_deal', {
+    p_lock_in_id: id,
+    p_to: to,
+  });
+  if (error) await fail(error);
+  return data as LockIn;
+}
+
 export async function myLockIns(): Promise<LockIn[]> {
   const { data, error } = await supabase
     .from('lock_ins')

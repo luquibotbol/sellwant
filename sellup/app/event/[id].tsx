@@ -69,11 +69,10 @@ export default function ListingDetailScreen() {
     setLockError(null);
     setLocking(true);
     try {
-      await createLockIn(l);
-      // Stay put: the lock-in is what unlocks the counterparty's contact
-      // details, so reloading here is the payoff for the action.
-      contact.reload();
-      listing.reload();
+      const created = await createLockIn(l);
+      // Straight to the handoff -- the deal screen is where everything the
+      // buyer needs now lives.
+      router.push(`/deal/${created.id}` as never);
     } catch (e: any) {
       setLockError(e?.message ?? 'Could not lock this in');
     } finally {
@@ -187,13 +186,23 @@ export default function ListingDetailScreen() {
           This is your listing.
         </Text>
       ) : (
-        <Button
-          title={selling ? `Lock in at ${money(l.price_cents)}` : 'I have one — respond'}
-          onPress={lockIn}
-          loading={locking}
-          block
-          style={styles.action}
-        />
+        <View style={styles.action}>
+          <Button
+            title={selling ? `Buy now at ${money(l.price_cents)}` : 'I have one — respond'}
+            onPress={lockIn}
+            loading={locking}
+            block
+          />
+          {/* D12: the button is always available -- one lowball must not be able
+              to suppress a full-price sale -- but the going rate sits beside it
+              so nobody pays sticker without seeing it. */}
+          {l.best_offer_cents != null && (
+            <Text variant="caption" tone="subtle" style={styles.actionNote}>
+              {selling ? 'Top offer' : 'Lowest ask'} is {money(l.best_offer_cents)}
+              {l.offer_count > 1 ? ` across ${l.offer_count} offers` : ''} — you can offer instead.
+            </Text>
+          )}
+        </View>
       )}
     </ScrollView>
   );
@@ -237,5 +246,6 @@ const styles = StyleSheet.create({
   safetyBody: { marginTop: space[2] },
   lockError: { marginTop: space[4] },
   action: { marginTop: space[6] },
+  actionNote: { marginTop: space[3], textAlign: 'center' },
   mine: { marginTop: space[6], textAlign: 'center' },
 });

@@ -89,6 +89,11 @@ export default function FeedScreen() {
         <View style={[styles.header, { paddingTop: insets.top + space[4] }]}>
           <Wordmark size="title" />
           <View style={styles.headerLinks}>
+            <Pressable onPress={() => router.push('/deals')} hitSlop={8}>
+              <Text variant="small" tone="muted">
+                Deals
+              </Text>
+            </Pressable>
             <Pressable onPress={() => router.push('/offers')} hitSlop={8}>
               <Text variant="small" tone="muted">
                 Offers
