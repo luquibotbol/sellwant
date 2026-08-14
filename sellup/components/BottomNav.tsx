@@ -1,0 +1,112 @@
+import React from 'react';
+import { View, StyleSheet, Pressable, Platform } from 'react-native';
+import { usePathname, router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Text from '@/components/ui/Text';
+import { colors, space, radius, maxContentWidth } from '@/constants/theme';
+
+/**
+ * Primary navigation.
+ *
+ * Replaces a row of text links in the feed header, which on a 375px phone left
+ * the wordmark competing with three targets and got worse with every screen
+ * added. A bottom bar is where a thumb already is, and it makes the app's
+ * shape obvious: browse, your deals, your offers, you.
+ *
+ * Hidden on the screens where navigating away is the wrong affordance --
+ * sign-in, onboarding, and the auth callback.
+ */
+const TABS = [
+  { href: '/feed', label: 'Browse', match: ['/feed', '/event'] },
+  { href: '/deals', label: 'Deals', match: ['/deals', '/deal'] },
+  { href: '/offers', label: 'Offers', match: ['/offers'] },
+  { href: '/profile', label: 'You', match: ['/profile', '/my-listings', '/u'] },
+] as const;
+
+const HIDDEN_ON = ['/', '/onboarding', '/auth/callback', '/create-event'];
+
+interface Props {
+  /** Optional counts, e.g. offers awaiting your response. */
+  badges?: Partial<Record<string, number>>;
+}
+
+export function BottomNav({ badges }: Props) {
+  const pathname = usePathname();
+  const insets = useSafeAreaInsets();
+
+  if (HIDDEN_ON.includes(pathname)) return null;
+
+  return (
+    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, space[2]) }]}>
+      <View style={styles.inner}>
+        {TABS.map((t) => {
+          // Longest-prefix match so /deal/123 lights up Deals, not Browse.
+          const active = t.match.some(
+            (m) => pathname === m || pathname.startsWith(`${m}/`)
+          );
+          const badge = badges?.[t.href] ?? 0;
+
+          return (
+            <Pressable
+              key={t.href}
+              onPress={() => router.replace(t.href as never)}
+              style={styles.tab}
+              hitSlop={6}
+            >
+              <View style={styles.labelRow}>
+                <Text
+                  variant={active ? 'bodyMedium' : 'body'}
+                  tone={active ? 'default' : 'subtle'}
+                >
+                  {t.label}
+                </Text>
+                {badge > 0 && (
+                  <View style={styles.badge}>
+                    <Text variant="caption" tone="inverse" style={styles.badgeText}>
+                      {badge > 9 ? '9+' : badge}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <View style={[styles.marker, active && styles.markerOn]} />
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
+    paddingTop: space[2],
+    // Sits above content on web where there's no native tab bar behaviour.
+    ...Platform.select({ web: { position: 'sticky' as never, bottom: 0 }, default: {} }),
+  },
+  inner: {
+    flexDirection: 'row',
+    width: '100%',
+    maxWidth: maxContentWidth,
+    alignSelf: 'center',
+    paddingHorizontal: space[3],
+  },
+  tab: { flex: 1, alignItems: 'center', gap: space[2], paddingVertical: space[1] },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
+  badge: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: radius.full,
+    backgroundColor: colors.want,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { fontSize: 11, lineHeight: 14 },
+  marker: { height: 2, width: 20, borderRadius: 1, backgroundColor: colors.transparent },
+  markerOn: { backgroundColor: colors.foreground },
+});
+
+export default BottomNav;

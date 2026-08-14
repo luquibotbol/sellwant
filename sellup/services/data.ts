@@ -302,10 +302,19 @@ export async function listLocationSuggestions(): Promise<string[]> {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
 }
 
+/**
+ * Categories are a fixed list that changes about never, but the feed refetched
+ * them on every visit -- a round trip a student pays for on 4G each time they
+ * open the app. Memoised for the session; a reload picks up any change.
+ */
+let categoryCache: Category[] | null = null;
+
 export async function listCategories(): Promise<Category[]> {
+  if (categoryCache) return categoryCache;
   const { data, error } = await supabase.from('categories').select('*').order('id');
   if (error) await fail(error);
-  return (data ?? []) as Category[];
+  categoryCache = (data ?? []) as Category[];
+  return categoryCache;
 }
 
 /** PostgREST `or` needs commas and parens escaped or they break the filter. */
