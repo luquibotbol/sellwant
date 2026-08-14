@@ -1,5 +1,3 @@
-import type { LockInState } from '@/services/data';
-
 /**
  * The handoff, as data.
  *
@@ -20,7 +18,13 @@ import type { LockInState } from '@/services/data';
  */
 
 export type Role = 'buyer' | 'seller';
-export type HandoffState = Exclude<LockInState, 'code_released'>;
+/**
+ * The states this flow drives. `code_released` exists in the database check
+ * constraint but is dead -- D2 decided SellUp never holds the ticket, so
+ * there is nothing to release. Declared locally rather than imported from
+ * services/data so this table stays a pure, testable module.
+ */
+export type HandoffState = 'pending_payment' | 'paid' | 'confirmed' | 'cancelled';
 
 export interface StepAction {
   /** Target state for advance_deal. */

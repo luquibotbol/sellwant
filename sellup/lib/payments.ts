@@ -1,11 +1,12 @@
-import { Linking, Platform } from 'react-native';
-import type { PaymentHandle } from '@/services/data';
-
 /**
  * Deep links for peer-to-peer payment apps.
  *
- * SellUp never moves money. These open someone else's app with the fields
- * pre-filled; whether the payment happens is between the two students.
+ * SellUp never moves money. These build a URL that opens someone else's app
+ * with the fields pre-filled; whether the payment happens is between the two
+ * students.
+ *
+ * Deliberately free of any react-native import so the logic stays pure and
+ * testable — opening the link lives in lib/open-payment.ts.
  *
  * Coverage is uneven and that has to be handled honestly rather than papered
  * over with a button that does nothing:
@@ -16,6 +17,14 @@ import type { PaymentHandle } from '@/services/data';
  *             addressed by phone/email, so the only honest affordance is
  *             copy-to-clipboard.
  */
+
+/** Structurally what this module needs; the full type lives in services/data. */
+export interface PayableHandle {
+  kind: string;
+  value: string;
+  label?: string;
+}
+
 export type PayAction =
   | { kind: 'link'; label: string; url: string }
   | { kind: 'copy'; label: string; value: string; hint: string };
@@ -23,7 +32,11 @@ export type PayAction =
 const cashtag = (v: string) => v.replace(/^\$/, '');
 const at = (v: string) => v.replace(/^@/, '');
 
-export function payAction(handle: PaymentHandle, amountCents: number, note: string): PayAction {
+export function payAction(
+  handle: PayableHandle,
+  amountCents: number,
+  note: string
+): PayAction {
   const amount = (amountCents / 100).toFixed(2);
 
   switch (handle.kind) {
@@ -32,9 +45,9 @@ export function payAction(handle: PaymentHandle, amountCents: number, note: stri
         kind: 'link',
         label: 'Pay with Venmo',
         // The web link works on desktop and hands off to the app on mobile,
-        // where the venmo:// scheme would silently fail if it isn't installed.
+        // where the venmo:// scheme fails silently if it isn't installed.
         url:
-          `https://venmo.com/${encodeURIComponent(at(handle.value))}` +
+          `https://venmo.com/${at(handle.value)}` +
           `?txn=pay&amount=${amount}&note=${encodeURIComponent(note)}`,
       };
 
@@ -42,14 +55,14 @@ export function payAction(handle: PaymentHandle, amountCents: number, note: stri
       return {
         kind: 'link',
         label: 'Pay with Cash App',
-        url: `https://cash.app/$${encodeURIComponent(cashtag(handle.value))}/${amount}`,
+        url: `https://cash.app/$${cashtag(handle.value)}/${amount}`,
       };
 
     case 'paypal':
       return {
         kind: 'link',
         label: 'Pay with PayPal',
-        url: `https://paypal.me/${encodeURIComponent(at(handle.value))}/${amount}`,
+        url: `https://paypal.me/${at(handle.value)}/${amount}`,
       };
 
     case 'zelle':
@@ -68,13 +81,4 @@ export function payAction(handle: PaymentHandle, amountCents: number, note: stri
         hint: 'Send it however you normally would.',
       };
   }
-}
-
-export async function openPayment(action: PayAction): Promise<void> {
-  if (action.kind !== 'link') return;
-  if (Platform.OS === 'web') {
-    window.open(action.url, '_blank', 'noopener');
-    return;
-  }
-  await Linking.openURL(action.url);
 }

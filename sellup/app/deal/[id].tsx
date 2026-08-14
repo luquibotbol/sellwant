@@ -14,7 +14,8 @@ import {
 } from '@/components/ui';
 import { colors, space, radius, maxContentWidth } from '@/constants/theme';
 import { money, whenAndWhere } from '@/lib/format';
-import { payAction, openPayment } from '@/lib/payments';
+import { payAction } from '@/lib/payments';
+import { openPayment } from '@/lib/open-payment';
 import { stepFor, PROGRESS, HandoffState, Role } from '@/lib/handoff';
 import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
