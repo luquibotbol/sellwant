@@ -135,7 +135,9 @@ export default function DealScreen() {
           label={role === 'buyer' ? 'YOU’RE BUYING' : 'YOU’RE SELLING'}
           variant={role === 'buyer' ? 'want' : 'sell'}
         />
-        <Text variant="display" tone={selling ? 'sell' : 'want'}>
+        {/* Colour follows YOUR side of this deal, not the listing type --
+            otherwise "YOU'RE BUYING" (green) sat next to a red price. */}
+        <Text variant="display" tone={role === 'buyer' ? 'want' : 'sell'}>
           {money(d.locked_price_cents)}
         </Text>
       </View>
