@@ -1,4 +1,4 @@
-# SellUp Spine — Design Spec
+# SellWant Spine — Design Spec
 
 **Date:** 2026-08-06
 **Status:** Approved for planning
@@ -14,7 +14,7 @@ not exist in this repository, on any branch.** Verified: no `web/` on `main`; th
 on the `v0` branch is an unrelated v0.dev-generated NextAuth + Prisma app; no `qr.ts`,
 `data.ts`, `schema.sql`, `CLAUDE.md`, or `AGENTS.md` anywhere; no `nextjs-webapp` branch.
 
-What exists is `sellup/` — an Expo / React Native app (Expo 52, expo-router 4,
+What exists is `sellwant/` — an Expo / React Native app (Expo 52, expo-router 4,
 RN 0.76, zustand, nativewind), roughly 6,000 lines, running entirely on mock data.
 
 This spec covers retrofitting the trust model onto that Expo app, starting with the
@@ -217,7 +217,7 @@ database becomes publicly readable and writable by anyone who opens devtools. It
 a non-prefixed variable, read only by the Node verification script.
 
 **`.gitignore` gap (must fix first):** the current file ignores `.env*.local` but not
-plain `.env`. `sellup/services/.env` — which holds a real Supabase URL and anon key for
+plain `.env`. `sellwant/services/.env` — which holds a real Supabase URL and anon key for
 the old project `erkxuqrlhnurdkrmtcof` — is untracked only by luck and would be committed
 by any `git add -A`. Add `.env` to `.gitignore` before anything else.
 
@@ -269,7 +269,7 @@ A further **965 lines** go with the data layer rewrite: `store/eventStore.ts` (1
 `constants/mockData.ts` (130). Total removal: **3,642 lines.**
 
 Root `package.json` additionally lists Firebase and react-navigation dependencies that
-nothing in `sellup/` imports; clean up.
+nothing in `sellwant/` imports; clean up.
 
 ## 9. Error states
 

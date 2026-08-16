@@ -1,4 +1,4 @@
-# SellUp Design System
+# SellWant Design System
 
 **Decided 2026-08-07.** Every screen built from here follows this document. If a
 screen needs something not covered here, extend the primitives — do not add a
@@ -7,7 +7,7 @@ one-off colour or spacing value in a screen file.
 ## The constraint that shapes everything
 
 **shadcn/ui cannot run in this app.** Its components are Radix + Tailwind +
-`className`, all DOM-only. SellUp is React Native rendered to web through
+`className`, all DOM-only. SellWant is React Native rendered to web through
 `react-native-web`, so there is no DOM in the component layer. `npx shadcn add`
 is not available to us.
 

@@ -12,7 +12,7 @@ What happens after two people agree a price. Today `accept_offer` creates a
 `lock_ins` row, reveals each party's phone and payment handles, and stops. The
 row sits at `pending_payment` forever.
 
-**SellUp never touches the ticket.** We keep only `sha256(normalised QR)`. The
+**SellWant never touches the ticket.** We keep only `sha256(normalised QR)`. The
 two parties exchange the ticket themselves — in person, or over WhatsApp. The
 handoff is coordination and record-keeping, not custody or escrow.
 
@@ -185,7 +185,7 @@ Synthesized from this review's findings. Each derives from a specific finding.
 - [ ] **T11 (P2, human: ~1h / CC: ~10min)** — copy — Claim-not-fact wording throughout
   - Surfaced by: Outside voice D13 — a formal transaction UI implies verification we never do
   - Files: `app/deal/[id].tsx`, `components/HandoffSteps.tsx`
-  - Verify: no string implies SellUp verified payment or holds a ticket
+  - Verify: no string implies SellWant verified payment or holds a ticket
 
 ## 9. Parallelization
 
