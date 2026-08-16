@@ -23,7 +23,13 @@ const TABS = [
   { href: '/profile', label: 'You', match: ['/profile', '/my-listings', '/u'] },
 ] as const;
 
-const HIDDEN_ON = ['/', '/onboarding', '/auth/callback', '/create-event'];
+const HIDDEN_ON = [
+  '/',
+  '/onboarding',
+  '/auth/callback',
+  '/auth/reset',
+  '/create-event',
+];
 
 interface Props {
   /** Optional counts, e.g. offers awaiting your response. */

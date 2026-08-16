@@ -137,14 +137,105 @@ export function onAuthChange(cb: (signedIn: boolean) => void) {
   return () => data.subscription.unsubscribe();
 }
 
-/** Sends a magic link. `redirectTo` matters on web -- it must be an origin
- *  allow-listed in the Supabase dashboard or the link silently fails. */
-export async function signInWithEmail(email: string, redirectTo?: string) {
-  const { error } = await supabase.auth.signInWithOtp({
+/**
+ * Why these don't go through `fail()`.
+ *
+ * `fail()` exists for a session that died mid-use -- it signs you out so the
+ * screens redirect. A wrong password is the opposite situation: there is no
+ * session to lose, and signing out would be noise. These throw an AuthProblem
+ * instead, carrying a `kind` the sign-in screen can branch on.
+ */
+export type AuthFailure =
+  | 'credentials'
+  | 'unconfirmed'
+  | 'exists'
+  | 'weak'
+  | 'rate'
+  | 'other';
+
+export class AuthProblem extends Error {
+  constructor(message: string, readonly kind: AuthFailure) {
+    super(message);
+    this.name = 'AuthProblem';
+  }
+}
+
+/** Supabase's auth errors are written for developers. These are the ones a
+ *  normal person can actually trigger, rewritten as something actionable. */
+function authProblem(error: unknown): AuthProblem {
+  const m = (error as { message?: string })?.message ?? '';
+  if (/invalid login credentials/i.test(m))
+    return new AuthProblem('That email and password don’t match.', 'credentials');
+  if (/not confirmed/i.test(m))
+    return new AuthProblem('Confirm your email first — check your inbox.', 'unconfirmed');
+  if (/already registered|already exists/i.test(m))
+    return new AuthProblem('That email already has an account. Sign in instead.', 'exists');
+  if (/password should be at least|weak password/i.test(m))
+    return new AuthProblem('Use at least 8 characters.', 'weak');
+  if (/rate limit|too many requests|after \d+ seconds/i.test(m))
+    return new AuthProblem('Too many tries. Wait a minute and try again.', 'rate');
+  return new AuthProblem(m || 'Something went wrong. Try again.', 'other');
+}
+
+/**
+ * Creates the account and mails the confirmation link.
+ *
+ * With "Confirm email" enabled, Supabase returns no session here -- the person
+ * is not signed in until they click the link. `needsVerification` reports that
+ * honestly rather than pretending they're in.
+ */
+export async function signUpWithPassword(
+  email: string,
+  password: string,
+  redirectTo?: string
+): Promise<{ needsVerification: boolean }> {
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim().toLowerCase(),
+    password,
+    options: redirectTo ? { emailRedirectTo: redirectTo } : undefined,
+  });
+  if (error) throw authProblem(error);
+  return { needsVerification: !data.session };
+}
+
+/** The everyday path: no email round-trip, just credentials. */
+export async function signInWithPassword(email: string, password: string) {
+  const { error } = await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(),
+    password,
+  });
+  if (error) throw authProblem(error);
+}
+
+/** Re-sends the confirmation email, for links that expired or never arrived. */
+export async function resendVerification(email: string, redirectTo?: string) {
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
     email: email.trim().toLowerCase(),
     options: redirectTo ? { emailRedirectTo: redirectTo } : undefined,
   });
-  if (error) await fail(error);
+  if (error) throw authProblem(error);
+}
+
+/**
+ * Starts password recovery.
+ *
+ * Supabase resolves this even for an address with no account, and we surface
+ * it the same way either — telling a stranger whether an email is registered
+ * here would leak who has an account.
+ */
+export async function sendPasswordReset(email: string, redirectTo?: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(
+    email.trim().toLowerCase(),
+    redirectTo ? { redirectTo } : undefined
+  );
+  if (error) throw authProblem(error);
+}
+
+/** Sets a new password for the recovery session the reset link created. */
+export async function updatePassword(password: string) {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw authProblem(error);
 }
 
 export async function signOut() {

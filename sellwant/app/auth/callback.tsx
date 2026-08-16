@@ -6,8 +6,10 @@ import { colors, space, maxContentWidth } from '@/constants/theme';
 import { getSession, onAuthChange } from '@/services/data';
 
 /**
- * Where the magic link lands on web. The Supabase client runs with
- * detectSessionInUrl, so it exchanges the code on load; this screen waits.
+ * Where the email-confirmation link lands on web. The Supabase client runs
+ * with detectSessionInUrl, so it exchanges the code on load; this screen
+ * waits. Password resets land on /auth/reset instead, because they need a
+ * form rather than a redirect.
  */
 export default function AuthCallback() {
   const [state, setState] = useState<'working' | 'done' | 'failed'>('working');
@@ -54,7 +56,8 @@ export default function AuthCallback() {
           <>
             <Text variant="title">That link didn&apos;t work</Text>
             <Text variant="small" tone="muted" style={styles.text}>
-              It may have expired or already been used. Request a new one.
+              Confirmation links expire and can only be used once. Sign in and
+              we&apos;ll send you a fresh one.
             </Text>
             <Button
               title="Back to sign in"

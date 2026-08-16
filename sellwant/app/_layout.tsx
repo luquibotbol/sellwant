@@ -70,6 +70,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="feed" options={{ headerShown: false }} />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/reset" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="deal/[id]" options={{ title: 'Handoff', headerBackTitle: 'Back' }} />
         <Stack.Screen name="deals" options={{ title: 'Your deals', headerBackTitle: 'Back' }} />
