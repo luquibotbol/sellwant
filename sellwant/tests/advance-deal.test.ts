@@ -233,3 +233,72 @@ describe('advance_deal — settlement side effects', () => {
     expect(await dealsCount(SELLER.id)).toBe(before);
   });
 });
+
+/**
+ * "Top offer" is the number that tells a stranger what a ticket actually goes
+ * for. It only means that if it counts offers from the *other* side.
+ *
+ * The bug this locks down: refresh_offer_stats took max()/min() across every
+ * open offer with no filter on who posted it, so a seller countering their own
+ * listing was scored as a buyer bidding that much. The headline number then
+ * advertised demand that did not exist.
+ */
+describe('offer stats — only the other side counts', () => {
+  /** A listing with no lock-in, so it stays `active` and accepts offers. */
+  async function freshListing(type: 'sell' | 'ask', price: number): Promise<string> {
+    const l = await rest(sellerTok, 'listings', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: SELLER.id,
+        type,
+        title: `Offer stats ${Date.now()}-${Math.round(performance.now())}`,
+        price_cents: price,
+        platform: 'bubbl',
+      }),
+    });
+    const id = l.body[0].id;
+    madeListings.push(id);
+    return id;
+  }
+
+  const offer = (tok: string, listingId: string, who: string, cents: number) =>
+    rest(tok, 'offers', {
+      method: 'POST',
+      body: JSON.stringify({ listing_id: listingId, from_user: who, amount_cents: cents }),
+    });
+
+  const stats = async (id: string) =>
+    (await rest(buyerTok, `listings?select=best_offer_cents,offer_count&id=eq.${id}`)).body[0];
+
+  test("a seller's own counter is not counted as a bid", async () => {
+    const id = await freshListing('sell', 3500);
+    await offer(buyerTok, id, BUYER.id, 3000);
+    expect(await stats(id)).toMatchObject({ best_offer_cents: 3000, offer_count: 1 });
+
+    // The seller counters higher than the buyer. Naive max() would report
+    // 3200 as the "top offer" -- the seller's own asking price.
+    await offer(sellerTok, id, SELLER.id, 3200);
+    expect(await stats(id)).toMatchObject({ best_offer_cents: 3000, offer_count: 1 });
+  });
+
+  test("a buyer's own counter is not counted on an ask listing", async () => {
+    // Mirror image: on an ask the stat is a min(), so the poster undercutting
+    // themselves would drag the advertised price down.
+    const id = await freshListing('ask', 2000);
+    await offer(buyerTok, id, BUYER.id, 2600);
+    expect(await stats(id)).toMatchObject({ best_offer_cents: 2600, offer_count: 1 });
+
+    await offer(sellerTok, id, SELLER.id, 2100);
+    expect(await stats(id)).toMatchObject({ best_offer_cents: 2600, offer_count: 1 });
+  });
+
+  test('the counter is still stored and visible, just not scored', async () => {
+    const id = await freshListing('sell', 3500);
+    await offer(buyerTok, id, BUYER.id, 3000);
+    await offer(sellerTok, id, SELLER.id, 3200);
+    const rows = (await rest(buyerTok, `offers?select=amount_cents,from_user&listing_id=eq.${id}&status=eq.open`)).body;
+    // Both rows exist -- the board shows the negotiation, the stat shows demand.
+    expect(rows.length).toBe(2);
+    expect(rows.some((r: { from_user: string }) => r.from_user === SELLER.id)).toBe(true);
+  });
+});

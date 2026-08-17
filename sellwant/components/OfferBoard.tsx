@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
-import { Text, Card, Avatar, Button, Input, Separator } from '@/components/ui';
+import { Text, Card, Avatar, Badge, Button, Input, Separator } from '@/components/ui';
 import { colors, space, radius } from '@/constants/theme';
 import { money } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
@@ -117,6 +117,12 @@ export function OfferBoard({ listing, meId, onSettled }: Props) {
         <Card style={styles.list}>
           {rows.map((o, i) => {
             const mine = o.from_user === meId;
+            // The poster answering their own listing is countering, not
+            // bidding. On a sell listing their "$12" means "I'll come down to
+            // 12" while a buyer's means "I'll pay 12" -- opposite directions,
+            // and rendering them identically is what made the board unreadable.
+            const fromPoster = o.from_user === listing.user_id;
+            const buySide = selling ? !fromPoster : fromPoster;
             return (
               <View key={o.id}>
                 {i > 0 && <Separator style={styles.divider} />}
@@ -124,12 +130,23 @@ export function OfferBoard({ listing, meId, onSettled }: Props) {
                   <Avatar uri={o.from?.profile_picture} name={o.from?.full_name} size={32} />
                   <View style={styles.rowBody}>
                     <View style={styles.rowTop}>
-                      <Text variant="bodyMedium">
-                        {mine ? 'You' : o.from?.full_name || 'Someone'}
-                      </Text>
-                      <Text variant="bodyMedium" tone={selling ? 'sell' : 'want'}>
-                        {money(o.amount_cents)}
-                      </Text>
+                      <View style={styles.who}>
+                        <Text variant="bodyMedium">
+                          {mine ? 'You' : o.from?.full_name || 'Someone'}
+                        </Text>
+                        {fromPoster && <Badge label="COUNTER" variant="outline" />}
+                      </View>
+                      <View style={styles.amountCol}>
+                        {/* Colour follows who is speaking, not the listing
+                            type -- the same rule the deal header uses. Green
+                            is the buying side, red the selling side. */}
+                        <Text variant="bodyMedium" tone={buySide ? 'want' : 'sell'}>
+                          {money(o.amount_cents)}
+                        </Text>
+                        <Text variant="caption" tone="subtle">
+                          {buySide ? 'will pay' : 'will take'}
+                        </Text>
+                      </View>
                     </View>
                     {!!o.message && (
                       <Text variant="small" tone="muted" style={styles.note}>
@@ -249,7 +266,9 @@ const styles = StyleSheet.create({
   divider: { marginHorizontal: -space[4] },
   row: { flexDirection: 'row', gap: space[3], paddingVertical: space[3] },
   rowBody: { flex: 1 },
-  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rowTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[2] },
+  who: { flexDirection: 'row', alignItems: 'center', gap: space[2], flexShrink: 1 },
+  amountCol: { alignItems: 'flex-end' },
   note: { marginTop: space[1] },
   actions: { flexDirection: 'row', gap: space[4], marginTop: space[2] },
   form: { marginTop: space[3] },
