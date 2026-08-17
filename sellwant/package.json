@@ -12,6 +12,9 @@
     "start-web": "expo start --web --tunnel",
     "start-web-dev": "DEBUG=expo* expo start --web --tunnel",
     "serve:local": "expo export -p web && python3 scripts/serve-local.py",
+    "build": "expo export -p web",
+    "deploy": "expo export -p web && wrangler deploy",
+    "deploy:dry": "expo export -p web && wrangler deploy --dry-run",
     "test:unit": "bun test tests/handoff.test.ts"
   },
   "dependencies": {

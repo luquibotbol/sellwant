@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sellwant",
+  "compatibility_date": "2026-08-17",
+  "main": "worker/index.js",
+  "account_id": "685b7b712d0c880fafade0c43ea84586",
+
+  // custom_domain makes Cloudflare create and manage the DNS record itself.
+  // Verify the record actually exists after a deploy: an OAuth login without
+  // DNS scope reports the domain attached and silently creates nothing.
+  "routes": [{ "pattern": "sellwant.com", "custom_domain": true }],
+
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+
+    // "none" means: no asset matched -> run the Worker. The Worker is what
+    // rewrites /deal/9f2c onto dist/deal/[id].html. Setting this to
+    // "single-page-application" instead would return index.html with a 200 for
+    // genuinely missing URLs, so typos would render the sign-in screen rather
+    // than a 404.
+    "not_found_handling": "none",
+
+    // Expo emits /feed.html and links to /feed. Without dropping the slash,
+    // Cloudflare 308-redirects to /feed/ and the relative asset paths break.
+    "html_handling": "drop-trailing-slash"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

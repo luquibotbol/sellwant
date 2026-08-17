@@ -1,0 +1,22 @@
+# Copied verbatim into dist/ by `expo export -p web` and applied by Cloudflare's
+# asset server.
+#
+# This file lives in public/ because that is the only directory Expo copies
+# through to the build output. It was previously only present in dist/, which
+# meant the next build silently dropped it.
+#
+# Matching rules are *appended*, not overridden — two rules that both set
+# Cache-Control produce one concatenated header and the first max-age wins. So
+# Cache-Control is set only on the hashed paths below, never on /*, and the HTML
+# shells keep the asset server's own no-cache default.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Content-hashed by Metro — a new build means a new URL, so these never go stale.
+/_expo/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
