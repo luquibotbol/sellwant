@@ -25,17 +25,21 @@ Supabase is still on the built-in mailer: **2 messages per hour**, best-effort,
 explicitly not for production. Every signup now needs an email, so this gates
 launch.
 
-Cloudflare Email Service does offer SMTP (`smtp.mx.cloudflare.net:465`, user
-`api_token`, password = a token with **Email Sending: Edit**), which drops
-straight into Supabase's custom SMTP. Two things are missing:
+**Use Resend, not Cloudflare.** Cloudflare Email Sending is *not available at
+all* on the Workers Free plan — it needs Workers Paid at $5/month, which then
+includes 3,000 emails. Resend gives the same 3,000/month for free, is GA rather
+than beta, and offers SMTP relay on the free plan.
 
-1. `sellwant.com` is not onboarded — Cloudflare dashboard → **Compute → Email
-   Service → Email Sending → Onboard Domain**. There is no API path for the
-   first onboarding.
-2. The API token in `.env` has DNS but **not** Email Sending: Edit.
+| | Cloudflare | Resend |
+| --- | --- | --- |
+| Cost for 3,000/mo | $5/month | free |
+| Status | beta | GA |
+| Daily cap | undocumented | 100/day |
 
-Cloudflare SMTP is in beta with an undocumented starting quota. If it throttles,
-Resend is a drop-in replacement — it is the same four SMTP fields.
+Resend free is 3,000/month, 100/day, one domain. The 100/day cap is the one to
+watch — it binds before the monthly total on a busy launch day.
+
+Then point Supabase → Authentication → SMTP Settings at Resend's SMTP relay.
 
 ### 3. `www.sellwant.com` does not resolve
 The apex works; `www` returns nothing at all. Needs a DNS record plus a Worker
