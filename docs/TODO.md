@@ -25,21 +25,25 @@ Supabase is still on the built-in mailer: **2 messages per hour**, best-effort,
 explicitly not for production. Every signup now needs an email, so this gates
 launch.
 
-**Use Resend, not Cloudflare.** Cloudflare Email Sending is *not available at
-all* on the Workers Free plan — it needs Workers Paid at $5/month, which then
-includes 3,000 emails. Resend gives the same 3,000/month for free, is GA rather
-than beta, and offers SMTP relay on the free plan.
+**Decision: Cloudflare, on Workers Paid.** Email Sending is unavailable on the
+Workers Free plan; Workers Paid is $5/month and includes 3,000 emails, then
+$0.35 per 1,000. Resend would give the same 3,000 free, but keeping one vendor
+and one bill was judged worth $5. Swapping later is four SMTP fields.
 
-| | Cloudflare | Resend |
-| --- | --- | --- |
-| Cost for 3,000/mo | $5/month | free |
-| Status | beta | GA |
-| Daily cap | undocumented | 100/day |
+Order matters:
 
-Resend free is 3,000/month, 100/day, one domain. The 100/day cap is the one to
-watch — it binds before the monthly total on a busy launch day.
+1. **Upgrade the account to Workers Paid.** Until then the Email Sending API
+   returns `Authentication error [code: 10000]` even for a token that holds the
+   `email_sending` scope — the gate is the plan, not the credential.
+2. **Onboard `sellwant.com`** — Cloudflare dashboard → **Compute → Email
+   Service → Email Sending → Onboard Domain**. No API path exists for the first
+   onboarding. This writes the `cf-bounce` MX, SPF, DKIM and DMARC records.
+3. Point Supabase → Authentication → SMTP Settings at:
+   `smtp.mx.cloudflare.net:465`, username the literal `api_token`, password a
+   Cloudflare API token with **Email Sending: Edit**.
 
-Then point Supabase → Authentication → SMTP Settings at Resend's SMTP relay.
+Cloudflare's SMTP submission is beta. If it proves flaky for auth mail, Resend
+is a drop-in: same host/port/user/pass shape, free for 3,000/month.
 
 ### 3. `www.sellwant.com` does not resolve
 The apex works; `www` returns nothing at all. Needs a DNS record plus a Worker
