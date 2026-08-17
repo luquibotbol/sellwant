@@ -16,7 +16,13 @@ const KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
 const BUYER = { email: 'maya@example.edu', id: 'aaaa1111-0000-4000-8000-000000000001' };
 const SELLER = { email: 'deshawn@example.edu', id: 'aaaa1111-0000-4000-8000-000000000002' };
-const PASSWORD = 'sellup-dev-only';
+/**
+ * From the environment, never the source. This repo is public, and once the
+ * web build ships, the Supabase URL and anon key are readable in the bundle --
+ * a password committed alongside them would be a working login for anyone.
+ * Deliberately not EXPO_PUBLIC_, so it can never be inlined into the client.
+ */
+const PASSWORD = process.env.SELLWANT_TEST_PASSWORD!;
 
 let buyerTok = '';
 let sellerTok = '';
@@ -100,6 +106,11 @@ const dealsCount = async (id: string) =>
 
 beforeAll(async () => {
   if (!URL || !KEY) throw new Error('Missing EXPO_PUBLIC_SUPABASE_* — run via `bun run test`');
+  // Without this the sign-ins below fail as "Invalid login credentials", which
+  // reads like a broken test rather than a missing variable.
+  if (!PASSWORD) {
+    throw new Error('Missing SELLWANT_TEST_PASSWORD — see .env.example');
+  }
   buyerTok = await signIn(BUYER.email);
   sellerTok = await signIn(SELLER.email);
   baseline = {
