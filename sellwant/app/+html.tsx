@@ -30,6 +30,14 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta name="apple-mobile-web-app-title" content="SellWant" />
         <title>SellWant</title>
 
+        {/* Explicit sizes rather than one scaled file: a 64px mark squeezed
+            into a 16px tab strip loses its counters. Each of these is drawn
+            with its own optical sizing. Served from public/, so the paths are
+            root-absolute and survive any route depth. */}
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: shell }} />
       </head>

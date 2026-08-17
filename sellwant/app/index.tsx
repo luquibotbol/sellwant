@@ -152,8 +152,11 @@ export default function SignInScreen() {
         contentContainerStyle={styles.inner}
         keyboardShouldPersistTaps="handled"
       >
+        {/* The only screen that animates. People arrive here cold and with
+            nothing to wait for; on the feed it would replay on every
+            navigation and wear out by the second day. */}
         <View style={styles.brand}>
-          <Wordmark size="display" />
+          <Wordmark size="display" animate />
           <Text variant="small" tone="muted" style={styles.tagline}>
             Buy what you want. Sell what you have.
           </Text>
