@@ -8,7 +8,11 @@
   // custom_domain makes Cloudflare create and manage the DNS record itself.
   // Verify the record actually exists after a deploy: an OAuth login without
   // DNS scope reports the domain attached and silently creates nothing.
-  "routes": [{ "pattern": "sellwant.com", "custom_domain": true }],
+  "routes": [
+    { "pattern": "sellwant.com", "custom_domain": true },
+    // www exists only to redirect to the apex; the Worker does that in code.
+    { "pattern": "www.sellwant.com", "custom_domain": true }
+  ],
 
   "assets": {
     "directory": "./dist",
@@ -23,7 +27,14 @@
 
     // Expo emits /feed.html and links to /feed. Without dropping the slash,
     // Cloudflare 308-redirects to /feed/ and the relative asset paths break.
-    "html_handling": "drop-trailing-slash"
+    "html_handling": "drop-trailing-slash",
+
+    // Required for the www -> apex redirect to be reachable at all: without
+    // it the platform serves a matching asset before the Worker ever runs, so
+    // www.sellwant.com/ would render the app instead of redirecting. The
+    // Worker now fetches assets itself, first thing, so behaviour is unchanged
+    // for every path that maps to a real file.
+    "run_worker_first": true
   },
 
   // Not secrets. These two are inlined into the client bundle by

@@ -159,9 +159,48 @@ function withCard(response, card) {
     .transform(response);
 }
 
+/** The one hostname everything should be reachable at. */
+const CANONICAL = 'sellwant.com';
+
+/**
+ * Where a request should be redirected to reach the canonical host, or null
+ * if it is already there.
+ *
+ * Pulled out as a pure function because `wrangler dev` rewrites the request
+ * host to the first configured route, so the redirect cannot be exercised
+ * locally through an actual HTTP call -- the only honest way to cover it is
+ * to test the decision directly.
+ */
+export function canonicalTarget(rawUrl, canonical = CANONICAL) {
+  const url = new URL(rawUrl);
+  if (url.hostname !== `www.${canonical}`) return null;
+  url.hostname = canonical;
+  // Path, query and hash ride along: someone opening a shared listing on www
+  // must land on that listing, not the homepage.
+  return url.toString();
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // One canonical host. Serving the app on both www and the apex would split
+    // every shared link between two URLs, and -- more concretely -- Supabase's
+    // Site URL and redirect allow-list name the apex only, so signing in on www
+    // would fail in a way that looks like an app bug.
+    //
+    // 301 rather than 302: this is permanent, and browsers and scrapers cache
+    // it, so the redirect stops costing anything after the first hit.
+    const canonical = canonicalTarget(request.url);
+    if (canonical) return Response.redirect(canonical, 301);
+
+    // With run_worker_first the platform no longer tries assets before us, so
+    // do it here. Anything that matches a real file -- every page, script,
+    // font and image -- is served exactly as before; only a miss falls through
+    // to the rewrite below. not_found_handling is "none", so a miss is a 404.
+    const asset = await env.ASSETS.fetch(request);
+    if (asset.status !== 404) return asset;
+
     const [, head, tail, ...rest] = url.pathname.split('/');
 
     // Exactly two segments. A third means a path we never generated, so let it
