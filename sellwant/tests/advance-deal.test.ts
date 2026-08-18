@@ -14,8 +14,24 @@ import { beforeAll, afterAll, describe, expect, test } from 'bun:test';
 const URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
-const BUYER = { email: 'maya@example.edu', id: 'aaaa1111-0000-4000-8000-000000000001' };
-const SELLER = { email: 'deshawn@example.edu', id: 'aaaa1111-0000-4000-8000-000000000002' };
+/**
+ * Ids are resolved at sign-in, not hardcoded.
+ *
+ * They used to be literals, and when the deshawn fixture was deleted and
+ * recreated the whole suite failed on a stale uuid rather than on anything
+ * real. The JWT already carries the id of whoever just signed in, so ask it.
+ */
+const BUYER = { email: 'maya@example.edu', id: '' };
+const SELLER = { email: 'deshawn@example.edu', id: '' };
+
+/** The `sub` claim, which is the user's id. */
+function idFromToken(tok: string): string {
+  const [, payload] = tok.split('.');
+  const json = JSON.parse(
+    Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()
+  );
+  return json.sub as string;
+}
 /**
  * From the environment, never the source. This repo is public, and once the
  * web build ships, the Supabase URL and anon key are readable in the bundle --
@@ -41,7 +57,13 @@ async function signIn(email: string): Promise<string> {
     body: JSON.stringify({ email, password: PASSWORD }),
   });
   const j = await r.json();
-  if (!j.access_token) throw new Error(`sign-in failed for ${email}: ${JSON.stringify(j)}`);
+  if (!j.access_token) {
+    throw new Error(
+      `sign-in failed for ${email}: ${JSON.stringify(j)}\n` +
+        'If the account is missing, recreate it in Supabase > Authentication > ' +
+        'Users with "Auto Confirm" and the SELLWANT_TEST_PASSWORD from .env.'
+    );
+  }
   return j.access_token;
 }
 
@@ -113,6 +135,8 @@ beforeAll(async () => {
   }
   buyerTok = await signIn(BUYER.email);
   sellerTok = await signIn(SELLER.email);
+  BUYER.id = idFromToken(buyerTok);
+  SELLER.id = idFromToken(sellerTok);
   baseline = {
     [BUYER.id]: await dealsCount(BUYER.id),
     [SELLER.id]: await dealsCount(SELLER.id),
