@@ -35,3 +35,6 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 .vercel
+
+# wrangler dev local state (miniflare caches, temp bundles)
+.wrangler/
