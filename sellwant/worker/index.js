@@ -30,18 +30,6 @@ const DYNAMIC = {
 const PREVIEWABLE = 'event';
 
 /**
- * Social scrapers, which never run JavaScript.
- *
- * Gating on this keeps the Supabase round-trip off the path real visitors
- * take: a person loading a listing gets the template immediately and the app
- * fills in the real data, so there is nothing to gain from making them wait
- * for tags they will never look at. The page itself is identical either way --
- * only the metadata differs -- so this is not cloaking.
- */
-const CRAWLER =
-  /(facebookexternalhit|Twitterbot|Slackbot|Discordbot|WhatsApp|TelegramBot|LinkedInBot|Pinterest|redditbot|Googlebot|bingbot|DuckDuckBot|Applebot|iMessage|SkypeUriPreview|vkShare|W3C_Validator|embedly|Iframely|GroupMe)/i;
-
-/**
  * User text, flattened for a preview card.
  *
  * HTMLRewriter's setAttribute already escapes quotes, and a browser keeps
@@ -107,6 +95,91 @@ async function fetchListing(env, id) {
   }
 }
 
+/** HTML-escape. Used where we genuinely build markup, which -- unlike setting
+ *  an attribute -- has no escaping of its own. */
+const esc = (t) =>
+  String(t ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+/**
+ * schema.org for one listing.
+ *
+ * The two listing types get genuinely different types, which is the whole
+ * point: `Offer` announces a ticket for sale, `Demand` announces someone
+ * seeking one. schema.org has both, and flattening a want listing into an
+ * Offer would tell every reader the opposite of the truth.
+ *
+ * validThrough is the event date: a ticket to a party that has happened is no
+ * longer an offer, and saying so stops stale listings being quoted as live.
+ */
+export function jsonLd(listing, url) {
+  const selling = listing.type === 'sell';
+  const terms = {
+    '@type': selling ? 'Offer' : 'Demand',
+    price: (listing.price_cents / 100).toFixed(2),
+    priceCurrency: 'USD',
+    availability: 'https://schema.org/InStock',
+    url,
+    ...(listing.event_date ? { validThrough: listing.event_date } : {}),
+  };
+
+  const doc = {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    name: plain(listing.title, 120) || 'Ticket',
+    url,
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    ...(listing.event_date ? { startDate: listing.event_date } : {}),
+    ...(listing.location
+      ? { location: { '@type': 'Place', name: plain(listing.location, 120) } }
+      : {}),
+    // Offer and Demand are both valid under `offers`; the @type inside says
+    // which direction this listing points.
+    offers: terms,
+  };
+
+  // A literal </script> inside a JSON string would close the block early.
+  return JSON.stringify(doc).replace(/</g, '\\u003c');
+}
+
+/**
+ * The listing as plain HTML, for readers that do not run JavaScript.
+ *
+ * In <noscript> on purpose. The page is client-rendered, so without this a
+ * crawler receives nine characters of shell. Putting it in the live DOM
+ * instead would duplicate the content for anyone using a screen reader and
+ * fight React on hydration; <noscript> says exactly what it means -- here is
+ * the content if you are not running scripts -- and matches what the app
+ * renders, so it is not cloaking.
+ */
+export function bodySummary(listing, url) {
+  const selling = listing.type === 'sell';
+  const price = money(listing.price_cents);
+  const rows = [
+    listing.event_date ? `<li>When: ${esc(pretty(listing.event_date))}</li>` : '',
+    listing.location ? `<li>Where: ${esc(plain(listing.location, 120))}</li>` : '',
+    `<li>${selling ? 'Asking' : 'Offering'}: ${esc(price)}</li>`,
+    listing.best_offer_cents != null
+      ? `<li>${selling ? 'Top offer' : 'Lowest ask'}: ${esc(money(listing.best_offer_cents))}</li>`
+      : '',
+  ].filter(Boolean).join('');
+
+  return (
+    `<noscript><article>` +
+    `<h1>${esc(plain(listing.title, 120))}</h1>` +
+    `<p>${selling ? 'For sale on SellWant.' : 'Wanted on SellWant.'}</p>` +
+    `<ul>${rows}</ul>` +
+    (listing.description ? `<p>${esc(plain(listing.description, 400))}</p>` : '') +
+    `<p>Money is paid directly between the two people; SellWant never holds it. ` +
+    `The handoff happens in person.</p>` +
+    `<p><a href="${esc(url)}">${esc(url)}</a></p>` +
+    `</article></noscript>`
+  );
+}
+
 function cardFor(listing, url) {
   const selling = listing.type === 'sell';
   const price = money(listing.price_cents);
@@ -140,7 +213,8 @@ function cardFor(listing, url) {
  * escapes for us. Listing titles are user input, so hand-built markup here
  * would be an injection into every scraped preview.
  */
-function withCard(response, card) {
+function withListingData(response, listing, url) {
+  const card = cardFor(listing, url);
   const set = (value) => ({
     element(el) {
       el.setAttribute('content', value);
@@ -156,7 +230,65 @@ function withCard(response, card) {
     .on('meta[name="description"]', set(card.description))
     .on('meta[property="og:url"]', set(card.url))
     .on('meta[property="og:type"]', set('product'))
+    // Machine-readable listing, and a human-readable fallback for anything
+    // that does not run the bundle.
+    .on('head', {
+      element(el) {
+        el.append(
+          `<script type="application/ld+json">${jsonLd(listing, url)}</script>`,
+          { html: true }
+        );
+        el.append(`<link rel="canonical" href="${esc(url)}"/>`, { html: true });
+      },
+    })
+    .on('body', {
+      element(el) {
+        el.prepend(bodySummary(listing, url), { html: true });
+      },
+    })
     .transform(response);
+}
+
+/**
+ * Every active listing as a sitemap.
+ *
+ * Same active-only rule as the feed, so sold and cancelled listings stay out --
+ * a completed trade's price belongs to the two people who made it.
+ */
+async function sitemap(env, origin) {
+  const urls = ['/', '/feed', '/signin'];
+  let rows = [];
+  try {
+    const res = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/listings?select=id,created_at&status=eq.active&limit=5000`,
+      { headers: { apikey: env.SUPABASE_ANON_KEY }, signal: AbortSignal.timeout(5000) }
+    );
+    if (res.ok) rows = await res.json();
+  } catch {
+    // A sitemap of the static routes still beats a 500.
+  }
+  const body =
+    `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
+    urls.map((u) => `<url><loc>${origin}${u}</loc></url>`).join('') +
+    (Array.isArray(rows) ? rows : [])
+      .map(
+        (r) =>
+          `<url><loc>${origin}/event/${esc(r.id)}</loc>` +
+          // created_at, because listings have no updated_at. Close enough for
+          // lastmod: the row's text does not change, only its offers do.
+          (r.created_at ? `<lastmod>${esc(String(r.created_at).slice(0, 10))}</lastmod>` : '') +
+          `</url>`
+      )
+      .join('') +
+    `</urlset>`;
+
+  return new Response(body, {
+    headers: {
+      'content-type': 'application/xml; charset=utf-8',
+      'cache-control': 'public, max-age=0, s-maxage=600',
+    },
+  });
 }
 
 /** The one hostname everything should be reachable at. */
@@ -181,7 +313,7 @@ export function canonicalTarget(rawUrl, canonical = CANONICAL) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     // One canonical host. Serving the app on both www and the apex would split
@@ -193,6 +325,9 @@ export default {
     // it, so the redirect stops costing anything after the first hit.
     const canonical = canonicalTarget(request.url);
     if (canonical) return Response.redirect(canonical, 301);
+
+    // Generated, not a static file: it has to list live listings.
+    if (url.pathname === '/sitemap.xml') return sitemap(env, url.origin);
 
     // With run_worker_first the platform no longer tries assets before us, so
     // do it here. Anything that matches a real file -- every page, script,
@@ -215,12 +350,31 @@ export default {
         // app reads the id off location, and rewriting it would break routing.
         // Status is forced to 200 -- this is a real page, not a fallback.
         const page = new Response(hit.body, { status: 200, headers: hit.headers });
+        if (head !== PREVIEWABLE) return page;
 
-        if (head === PREVIEWABLE && CRAWLER.test(request.headers.get('user-agent') || '')) {
-          const listing = await fetchListing(env, tail);
-          if (listing) return withCard(page, cardFor(listing, url.toString()));
-        }
-        return page;
+        // Everyone gets the same markup, crawler or not.
+        //
+        // This was gated on a user-agent allowlist to keep the database read
+        // off the path real people take. Two things were wrong with that:
+        // serving crawlers different metadata is what cloaking means, and an
+        // allowlist silently fails for exactly the unlisted agents this is
+        // meant to be legible to. The edge cache buys the latency back without
+        // telling anyone a different story.
+        const key = new Request(url.toString(), { method: 'GET' });
+        const cached = await caches.default.match(key);
+        if (cached) return cached;
+
+        const listing = await fetchListing(env, tail);
+        if (!listing) return page;
+
+        const enriched = withListingData(page, listing, url.toString());
+        const out = new Response(enriched.body, { status: 200, headers: enriched.headers });
+        // Short, because prices move and a settled listing must stop being
+        // advertised as available. s-maxage keeps it at the edge without
+        // pinning a stale copy in anyone's browser.
+        out.headers.set('cache-control', 'public, max-age=0, s-maxage=60');
+        ctx.waitUntil(caches.default.put(key, out.clone()));
+        return out;
       }
     }
 
