@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
+import { router } from 'expo-router';
 import { Text, Card, Avatar, Badge, Button, Input, Separator } from '@/components/ui';
 import { colors, space, radius } from '@/constants/theme';
 import { money } from '@/lib/format';
@@ -161,7 +162,7 @@ export function OfferBoard({ listing, meId, onSettled }: Props) {
                           </Text>
                         </Pressable>
                       )}
-                      {!mine && (
+                      {!mine && !!meId && (
                         <Pressable
                           onPress={() => {
                             setReplyTo(o);
@@ -197,9 +198,31 @@ export function OfferBoard({ listing, meId, onSettled }: Props) {
         </Card>
       )}
 
-      {/* Once a deal is struck the listing leaves the market, and the insert
-          policy rejects new offers -- so don't offer a form that cannot work. */}
-      {listing.status !== 'active' ? (
+      {/* Logged out can read the board -- the going rate is the most
+          persuasive thing here -- but posting needs an account. Showing a
+          disabled action rather than nothing tells people what the site does. */}
+      {!meId ? (
+        <Card style={styles.form}>
+          <Text variant="bodyMedium">
+            {selling ? 'Want it for less?' : 'Got one to sell?'}
+          </Text>
+          <Text variant="small" tone="muted" style={styles.signInBody}>
+            Offers and counter-offers are public, so everyone can see the going
+            rate. You need an account to post one.
+          </Text>
+          <Button
+            title="Sign in to make an offer"
+            variant={selling ? 'sell' : 'want'}
+            block
+            onPress={() =>
+              router.push(
+                `/?returnTo=${encodeURIComponent(`/event/${listing.id}`)}` as never
+              )
+            }
+            style={styles.signInAction}
+          />
+        </Card>
+      ) : listing.status !== 'active' ? (
         <Card style={styles.form}>
           <Text variant="small" tone="muted">
             {listing.status === 'locked'
@@ -272,6 +295,8 @@ const styles = StyleSheet.create({
   note: { marginTop: space[1] },
   actions: { flexDirection: 'row', gap: space[4], marginTop: space[2] },
   form: { marginTop: space[3] },
+  signInBody: { marginTop: space[2], lineHeight: 20 },
+  signInAction: { marginTop: space[4] },
   replyBanner: {
     flexDirection: 'row',
     alignItems: 'center',

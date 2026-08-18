@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Pressable, Platform } from 'react-native';
 import { usePathname, router } from 'expo-router';
+import { useSession } from '@/hooks/useSession';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Text from '@/components/ui/Text';
 import { colors, space, radius, maxContentWidth } from '@/constants/theme';
@@ -23,6 +24,16 @@ const TABS = [
   { href: '/profile', label: 'You', match: ['/profile', '/my-listings', '/u'] },
 ] as const;
 
+/**
+ * Logged out, three of those four tabs lead straight back to a sign-in screen.
+ * Offering them is a menu of dead ends, so a visitor gets the one thing they
+ * can do and the one thing we want them to do.
+ */
+const ANON_TABS = [
+  { href: '/feed', label: 'Browse', match: ['/feed', '/event'] },
+  { href: '/', label: 'Sign in', match: [] as string[] },
+] as const;
+
 const HIDDEN_ON = [
   '/',
   '/onboarding',
@@ -39,13 +50,19 @@ interface Props {
 export function BottomNav({ badges }: Props) {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const session = useSession();
 
   if (HIDDEN_ON.includes(pathname)) return null;
+  // undefined means "still checking" -- rendering the anonymous bar first and
+  // swapping a beat later would flash "Sign in" at someone already signed in.
+  if (session === undefined) return null;
+
+  const tabs = session ? TABS : ANON_TABS;
 
   return (
     <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, space[2]) }]}>
       <View style={styles.inner}>
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           // Longest-prefix match so /deal/123 lights up Deals, not Browse.
           const active = t.match.some(
             (m) => pathname === m || pathname.startsWith(`${m}/`)

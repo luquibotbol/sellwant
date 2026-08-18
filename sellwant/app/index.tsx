@@ -8,10 +8,12 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
-import { Redirect } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { Text, Wordmark, Button, Input, Card } from '@/components/ui';
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { authRedirect } from '@/lib/site-url';
+import { safeReturnTo } from '@/lib/return-to';
 import {
   getSession,
   onAuthChange,
@@ -31,6 +33,20 @@ type View_ = 'form' | 'verify' | 'reset-sent';
 const MIN_PASSWORD = 8;
 
 export default function SignInScreen() {
+  // Set when a visitor was sent here by an action on a public page. Validated,
+  // because an unchecked value would let a crafted link bounce someone off the
+  // site the moment they authenticate.
+  const params = useLocalSearchParams<{ returnTo?: string }>();
+  const returnTo = safeReturnTo(params.returnTo);
+  /**
+   * This route sits at the bottom of the stack AND gets pushed on top when a
+   * logged-out visitor taps a gated action, so two copies are mounted at once.
+   * Both would fire the redirect below on sign-in -- one to the listing, one
+   * to the feed -- and which lands would be a race. Only the visible one may
+   * navigate.
+   */
+  const isFocused = useIsFocused();
+
   const [checking, setChecking] = useState(true);
   const [signedIn, setSignedIn] = useState(false);
 
@@ -62,7 +78,9 @@ export default function SignInScreen() {
     );
   }
 
-  if (signedIn) return <Redirect href="/feed" />;
+  // Back to whatever they were looking at, not a generic feed -- landing
+  // somewhere unrelated after signing up loses the thing they came for.
+  if (signedIn && isFocused) return <Redirect href={(returnTo ?? '/feed') as never} />;
 
   const emailLooksReal = /\S+@\S+\.\S+/.test(email);
 
@@ -88,7 +106,14 @@ export default function SignInScreen() {
         const { needsVerification } = await signUpWithPassword(
           email,
           password,
-          authRedirect('/auth/callback')
+          // Carried through the email round-trip. Without it, someone who
+          // signs up from a listing confirms their address and lands on a
+          // feed, having lost the ticket they came for.
+          authRedirect(
+            returnTo
+              ? `/auth/callback?returnTo=${encodeURIComponent(returnTo)}`
+              : '/auth/callback'
+          )
         );
         // If the project has confirmations off, signUp returns a live session
         // and onAuthChange has already redirected us. Only stop here when a
@@ -160,6 +185,12 @@ export default function SignInScreen() {
           <Text variant="small" tone="muted" style={styles.tagline}>
             Buy what you want. Sell what you have.
           </Text>
+          {!!returnTo && (
+            <Text variant="caption" tone="subtle" style={styles.context}>
+              You need an account to make offers and message people. Browsing
+              stays free — we&apos;ll take you back to what you were looking at.
+            </Text>
+          )}
         </View>
 
         {view === 'verify' && (
@@ -313,6 +344,7 @@ const styles = StyleSheet.create({
   },
   brand: { marginBottom: space[10] },
   tagline: { marginTop: space[2] },
+  context: { marginTop: space[4], lineHeight: 18 },
   body: { marginTop: space[2], lineHeight: 20 },
   password: { marginTop: space[4] },
   helpers: {

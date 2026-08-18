@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { Text, Button } from '@/components/ui';
 import { colors, space, maxContentWidth } from '@/constants/theme';
-import { getSession, onAuthChange } from '@/services/data';
+import { getSession, onAuthChange, getMyProfile } from '@/services/data';
+import { safeReturnTo } from '@/lib/return-to';
 
 /**
  * Where the email-confirmation link lands on web. The Supabase client runs
@@ -12,18 +13,42 @@ import { getSession, onAuthChange } from '@/services/data';
  * form rather than a redirect.
  */
 export default function AuthCallback() {
+  const params = useLocalSearchParams<{ returnTo?: string }>();
+  const returnTo = safeReturnTo(params.returnTo);
   const [state, setState] = useState<'working' | 'done' | 'failed'>('working');
+  /** Null until known. A fresh account has no name yet, and an offer from a
+   *  nameless profile is worse than a short detour through onboarding. */
+  const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    let resolved = false;
+
+    // The session can arrive either from getSession (already exchanged) or
+    // from onAuthChange (exchanged a moment later). Both funnel through here,
+    // because setting `done` without also resolving onboarding would leave the
+    // redirect condition permanently unmet and the spinner running forever.
+    const resolve = async () => {
+      if (cancelled || resolved) return;
+      resolved = true;
+      try {
+        const me = await getMyProfile();
+        if (!cancelled) setNeedsOnboarding(!me?.onboarded_at);
+      } catch {
+        // Treat an unreadable profile as "already onboarded": sending someone
+        // round the loop again is worse than a missing name.
+        if (!cancelled) setNeedsOnboarding(false);
+      }
+      if (!cancelled) setState('done');
+    };
 
     const unsubscribe = onAuthChange((signedIn) => {
-      if (!cancelled && signedIn) setState('done');
+      if (signedIn) void resolve();
     });
 
     getSession()
       .then((s) => {
-        if (!cancelled && s) setState('done');
+        if (s) void resolve();
       })
       .catch(() => {});
 
@@ -40,7 +65,13 @@ export default function AuthCallback() {
     };
   }, []);
 
-  if (state === 'done') return <Redirect href="/feed" />;
+  if (state === 'done' && needsOnboarding !== null) {
+    const onward = returnTo ?? '/feed';
+    const href = needsOnboarding
+      ? `/onboarding?returnTo=${encodeURIComponent(onward)}`
+      : onward;
+    return <Redirect href={href as never} />;
+  }
 
   return (
     <View style={styles.container}>

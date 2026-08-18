@@ -64,6 +64,11 @@ export default function ListingDetailScreen() {
   const l = listing.data;
   const selling = l.type === 'sell';
   const mine = myId === l.user_id;
+  // Logged out can read this page -- that is the point of a shareable link --
+  // but every action still needs an account. Sending the listing along means
+  // signing in returns you here rather than dumping you on an empty feed.
+  const anon = !session.data;
+  const signInHere = `/?returnTo=${encodeURIComponent(`/event/${l.id}`)}`;
 
   const lockIn = async () => {
     setLockError(null);
@@ -110,6 +115,16 @@ export default function ListingDetailScreen() {
           </>
         )}
       </Card>
+
+      {anon && (
+        <Card style={styles.poster} onPress={() => router.push(signInHere as never)}>
+          <Text variant="bodyMedium">Sign in to see who&apos;s selling</Text>
+          <Text variant="small" tone="muted" style={styles.posterMeta}>
+            Names, Instagram handles and completed-handoff counts are only
+            visible to people with an account.
+          </Text>
+        </Card>
+      )}
 
       {l.poster && (
         <Card style={styles.poster} onPress={() => router.push(`/u/${l.user_id}` as never)}>
@@ -188,8 +203,14 @@ export default function ListingDetailScreen() {
       ) : (
         <View style={styles.action}>
           <Button
-            title={selling ? `Buy now at ${money(l.price_cents)}` : 'I have one — respond'}
-            onPress={lockIn}
+            title={
+              anon
+                ? `Sign in to ${selling ? 'buy' : 'respond'}`
+                : selling
+                  ? `Buy now at ${money(l.price_cents)}`
+                  : 'I have one — respond'
+            }
+            onPress={() => (anon ? router.push(signInHere as never) : lockIn())}
             loading={locking}
             block
           />

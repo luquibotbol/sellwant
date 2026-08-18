@@ -142,6 +142,10 @@ export function Wordmark({ size = 'title', style, animate = false }: Props) {
   const textProps = {
     x: 0,
     y: baseline,
+    // Both halves render the full word with one side transparent, so without
+    // this the tree exposes "SellWant" twice. The <svg> carries role="img"
+    // and aria-label, which is the accessible name that should win.
+    'aria-hidden': true,
     fontFamily: typeScale[size].fontFamily,
     fontSize,
     letterSpacing: typeScale[size].letterSpacing,

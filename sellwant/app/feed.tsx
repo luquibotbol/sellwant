@@ -79,9 +79,14 @@ export default function FeedScreen() {
       </View>
     );
   }
-  if (!session) return <Redirect href="/" />;
+  // Logged out is a normal state here: the feed is the shop window, and a link
+  // pasted into a group chat has to open for people who have never heard of us.
+  // Everything that acts on a listing still asks for an account.
+  const anon = !session;
   // Everyone trades under a real name, so the profile has to be finished first.
-  if (me.data && !me.data.onboarded_at) return <Redirect href="/onboarding" />;
+  if (session && me.data && !me.data.onboarded_at) {
+    return <Redirect href="/onboarding" />;
+  }
 
   return (
     <View style={styles.container}>
@@ -199,8 +204,10 @@ export default function FeedScreen() {
                 <EmptyState
                   title="Nothing here yet"
                   body="Post a ticket you're selling, or ask for one you want."
-                  actionLabel="Post a listing"
-                  onAction={() => router.push('/create-event')}
+                  actionLabel={anon ? 'Sign in to post' : 'Post a listing'}
+                  onAction={() =>
+                    router.push(anon ? '/?returnTo=%2Fcreate-event' : '/create-event')
+                  }
                 />
               )
             }
@@ -262,7 +269,9 @@ export default function FeedScreen() {
 
       <Pressable
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-        onPress={() => router.push('/create-event')}
+        onPress={() =>
+          router.push(anon ? '/?returnTo=%2Fcreate-event' : '/create-event')
+        }
       >
         <Text variant="title" tone="inverse" style={styles.fabPlus}>
           +

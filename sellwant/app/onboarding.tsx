@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { safeReturnTo } from '@/lib/return-to';
 import { Text, Wordmark, Card, Button, Input, Badge } from '@/components/ui';
 import AvatarPicker from '@/components/AvatarPicker';
 import { colors, space, maxContentWidth } from '@/constants/theme';
@@ -11,6 +12,8 @@ import { getMyProfile, completeOnboarding } from '@/services/data';
 const PHONE_RE = /^[0-9+()\-.\s]{7,}$/;
 
 export default function OnboardingScreen() {
+  const params = useLocalSearchParams<{ returnTo?: string }>();
+  const onward = safeReturnTo(params.returnTo) ?? '/feed';
   const profile = useAsync(getMyProfile, []);
 
   const [fullName, setFullName] = useState('');
@@ -24,7 +27,7 @@ export default function OnboardingScreen() {
   if (profile.loading) return <View style={styles.container} />;
   if (!profile.data) return <Redirect href="/" />;
   // Already done -- don't trap people here on a refresh.
-  if (profile.data.onboarded_at) return <Redirect href="/feed" />;
+  if (profile.data.onboarded_at) return <Redirect href={onward as never} />;
 
   const submit = async () => {
     const next: Record<string, string> = {};
@@ -43,7 +46,7 @@ export default function OnboardingScreen() {
         instagram: instagram.replace(/^@/, '').trim() || null,
         profile_picture: photo,
       });
-      router.replace('/feed');
+      router.replace(onward as never);
     } catch (e: any) {
       setFormError(e?.message ?? 'Could not save your details');
     } finally {
