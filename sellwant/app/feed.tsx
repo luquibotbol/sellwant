@@ -92,7 +92,7 @@ export default function FeedScreen() {
     <View style={styles.container}>
       <View style={styles.frame}>
         <View style={[styles.header, { paddingTop: insets.top + space[4] }]}>
-          <Wordmark size="title" />
+          <Wordmark size="title" animate />
           {/* Navigation moved to the bottom bar -- three text links crowded
               the wordmark on a phone and got worse with every screen. */}
         </View>

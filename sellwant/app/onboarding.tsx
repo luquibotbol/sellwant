@@ -60,7 +60,7 @@ export default function OnboardingScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Wordmark size="display" />
+        <Wordmark size="display" animate />
         <Text variant="small" tone="muted" style={styles.intro}>
           Set up your profile before you start trading. People are handing money
           to a stranger — knowing who you are is what makes that feel safe.

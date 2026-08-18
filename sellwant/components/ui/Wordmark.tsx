@@ -15,9 +15,9 @@ interface Props {
   size?: Size;
   style?: TextProps['style'];
   /**
-   * Web-only. Accepted here so callers can pass it unconditionally; the reveal
-   * needs animated clip paths, which react-native-web's Text cannot express,
-   * so it lives in Wordmark.web.tsx and native simply renders static.
+   * Web-only, and accepted here so callers can pass it unconditionally. The
+   * reveal needs animated clip paths, which react-native-web's Text cannot
+   * express, so it lives in Wordmark.web.tsx and native renders static.
    */
   animate?: boolean;
 }

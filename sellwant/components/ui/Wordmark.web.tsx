@@ -70,6 +70,17 @@ const CSS = `
 }
 `;
 
+/**
+ * Played once per page load, not once per mount.
+ *
+ * The wordmark sits on several screens, and expo-router remounts a screen
+ * every time you navigate to it -- so keying the reveal to mount would replay
+ * it on every trip back to the feed, which is how a nice flourish becomes an
+ * irritation by the second day. A full page load is the event worth marking;
+ * moving around inside the app is not.
+ */
+let playedThisLoad = false;
+
 let injected = false;
 function useStyleOnce() {
   useEffect(() => {
@@ -84,12 +95,20 @@ function useStyleOnce() {
 interface Props {
   size?: Size;
   style?: TextProps['style'];
-  /** Play the reveal on mount. Off everywhere except the sign-in screen. */
+  /** Opt in to the reveal. It still plays at most once per page load, so
+   *  setting this on every screen showing the mark is safe. */
   animate?: boolean;
 }
 
 export function Wordmark({ size = 'title', style, animate = false }: Props) {
   useStyleOnce();
+  // Claimed during the first render of the first instance this page load.
+  // Everyone else renders the settled mark immediately.
+  const [play] = useState(() => {
+    if (!animate || playedThisLoad) return false;
+    playedThisLoad = true;
+    return true;
+  });
   const fontSize = typeScale[size].fontSize;
   const svgRef = useRef<SVGSVGElement | null>(null);
   const sellRef = useRef<SVGTextElement | null>(null);
@@ -102,7 +121,7 @@ export function Wordmark({ size = 'title', style, animate = false }: Props) {
   // Measure once the webfont is actually resolved. Before that the fallback
   // metrics are wrong, and a viewBox set from them makes the mark jump.
   useEffect(() => {
-    if (!animate) return;
+    if (!play) return;
     let dead = false;
     const measure = () => {
       const t = sellRef.current;
@@ -121,9 +140,9 @@ export function Wordmark({ size = 'title', style, animate = false }: Props) {
     return () => {
       dead = true;
     };
-  }, [animate]);
+  }, [play]);
 
-  if (!animate) {
+  if (!play) {
     return (
       <Text variant={size} style={style}>
         <Text variant={size} tone="sell">
