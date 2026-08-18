@@ -8,7 +8,7 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
-import { Redirect, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { Text, Wordmark, Button, Input, Card } from '@/components/ui';
 import { colors, space, maxContentWidth } from '@/constants/theme';
@@ -21,6 +21,7 @@ import {
   signUpWithPassword,
   resendVerification,
   sendPasswordReset,
+  signInWithGoogle,
   AuthProblem,
 } from '@/services/data';
 
@@ -160,6 +161,19 @@ export default function SignInScreen() {
     }
   };
 
+  const google = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      // Comes back to wherever they were headed, same as the password path.
+      await signInWithGoogle(authRedirect(returnTo ?? '/feed'));
+      // Redirects away; nothing after this runs on success.
+    } catch (e) {
+      setError((e as Error)?.message ?? 'Could not start Google sign-in.');
+      setBusy(false);
+    }
+  };
+
   const startOver = () => {
     setView('form');
     setResent(false);
@@ -250,6 +264,17 @@ export default function SignInScreen() {
 
         {view === 'form' && (
           <>
+            <Button
+              title="Continue with Google"
+              variant="secondary"
+              block
+              loading={busy}
+              onPress={google}
+            />
+            <Text variant="caption" tone="subtle" style={styles.or}>
+              or use an email and password
+            </Text>
+
             <Input
               label="Email"
               value={email}
@@ -316,6 +341,29 @@ export default function SignInScreen() {
               style={styles.action}
             />
 
+            {mode === 'signup' && (
+              <Text variant="caption" tone="subtle" style={styles.legal}>
+                By creating an account you confirm you are 18 or over and agree
+                to our{' '}
+                <Text
+                  variant="caption"
+                  tone="muted"
+                  onPress={() => router.push('/terms' as never)}
+                >
+                  Terms
+                </Text>{' '}
+                and{' '}
+                <Text
+                  variant="caption"
+                  tone="muted"
+                  onPress={() => router.push('/privacy' as never)}
+                >
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+            )}
+
             <Pressable onPress={() => swap(mode === 'signup' ? 'signin' : 'signup')}>
               <Text variant="caption" tone="subtle" style={styles.fine}>
                 {mode === 'signup'
@@ -353,5 +401,7 @@ const styles = StyleSheet.create({
   },
   action: { marginTop: space[5] },
   secondary: { marginTop: space[2] },
+  or: { textAlign: 'center', marginTop: space[4], marginBottom: space[4] },
+  legal: { marginTop: space[4], lineHeight: 17 },
   fine: { textAlign: 'center', marginTop: space[5] },
 });

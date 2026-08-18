@@ -97,6 +97,8 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="feed" options={{ headerShown: false }} />
         <Stack.Screen name="signin" options={{ headerShown: false }} />
+        <Stack.Screen name="terms" options={{ title: 'Terms', headerBackTitle: 'Back' }} />
+        <Stack.Screen name="privacy" options={{ title: 'Privacy', headerBackTitle: 'Back' }} />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
         <Stack.Screen name="auth/reset" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />

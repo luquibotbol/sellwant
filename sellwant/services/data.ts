@@ -198,6 +198,30 @@ export async function signUpWithPassword(
   return { needsVerification: !data.session };
 }
 
+/**
+ * Google sign-in.
+ *
+ * Worth having beyond convenience: a Google account is already verified, so
+ * this path sends no confirmation email at all. That removes the slowest step
+ * in signing up and takes load off an SMTP service that is still in beta and
+ * metered.
+ *
+ * Redirects away from the page, so nothing after this call runs. The provider
+ * returns to `redirectTo`, which must be in Supabase's allow-list.
+ */
+export async function signInWithGoogle(redirectTo?: string) {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      ...(redirectTo ? { redirectTo } : {}),
+      // Ask for the profile photo as well as the name, so onboarding has
+      // something to prefill rather than an empty form.
+      queryParams: { prompt: 'select_account' },
+    },
+  });
+  if (error) throw authProblem(error);
+}
+
 /** The everyday path: no email round-trip, just credentials. */
 export async function signInWithPassword(email: string, password: string) {
   const { error } = await supabase.auth.signInWithPassword({

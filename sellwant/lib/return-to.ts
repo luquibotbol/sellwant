@@ -10,7 +10,7 @@
  * Rejects protocol-relative `//host` too. Browsers treat that as absolute, so
  * a naive "must start with /" check lets it straight through.
  */
-export function safeReturnTo(raw: unknown): string | null {
+export function safeReturnTo(raw: unknown): `/${string}` | null {
   if (typeof raw !== 'string') return null;
   const path = raw.trim();
   if (!path.startsWith('/')) return null;
@@ -18,5 +18,8 @@ export function safeReturnTo(raw: unknown): string | null {
   // Backslashes are normalised to slashes by some browsers, so `/\evil.com`
   // can escape the same way `//evil.com` does.
   if (path.includes('\\')) return null;
-  return path;
+  // The checks above guarantee the leading slash, so tell the type system --
+  // callers that build redirect URLs require it, and a cast at each of those
+  // would move the guarantee away from the code that enforces it.
+  return path as `/${string}`;
 }

@@ -9,6 +9,8 @@ Sitemap: https://sellwant.com/sitemap.xml
 User-agent: *
 Allow: /
 Allow: /api/listings.json
+Allow: /terms
+Allow: /privacy
 
 # Private surfaces. They already require a session and redirect when signed
 # out, but naming them keeps them out of indexes and out of crawl budget
