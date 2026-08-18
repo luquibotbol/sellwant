@@ -50,7 +50,11 @@ jobs:
   deploy:
     name: Deploy to Cloudflare
     needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Everything except a PR deploys. The push trigger is already
+    # restricted to main, and the manual "Run workflow" button should
+    # actually ship -- guarding on event_name == 'push' silently turned
+    # every manual run into a checks-only run.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
