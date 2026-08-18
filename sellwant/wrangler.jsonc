@@ -26,6 +26,15 @@
     "html_handling": "drop-trailing-slash"
   },
 
+  // Not secrets. These two are inlined into the client bundle by
+  // `expo export` and are readable by anyone who opens devtools -- RLS is what
+  // protects the data. The Worker uses them to read active listings for link
+  // previews, so a scraper is told nothing a logged-out visitor could not see.
+  "vars": {
+    "SUPABASE_URL": "https://gguzeafbwsqkhggmcjjl.supabase.co",
+    "SUPABASE_ANON_KEY": "sb_publishable_yURvtobGL9P0gJn0Ouwh3w__I1Xr2C4"
+  },
+
   "observability": {
     "enabled": true
   }
