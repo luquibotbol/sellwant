@@ -439,7 +439,7 @@ async function listingsJson(env, origin) {
  * a completed trade's price belongs to the two people who made it.
  */
 async function sitemap(env, origin) {
-  const urls = ['/', '/feed', '/signin'];
+  const urls = ['/', '/feed', '/terms', '/privacy'];
   let rows = [];
   try {
     const res = await fetch(
