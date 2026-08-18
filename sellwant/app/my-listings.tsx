@@ -1,12 +1,26 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { Redirect, router } from 'expo-router';
-import { Text, Card, Badge, Button, EmptyState, ErrorState } from '@/components/ui';
+import {
+  Text,
+  Card,
+  Badge,
+  Button,
+  EmptyState,
+  ErrorState,
+  SegmentedFilter,
+} from '@/components/ui';
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { money, whenAndWhere } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
-import { myListings, cancelListing, ListingWithPoster, ListingStatus } from '@/services/data';
+import {
+  myListings,
+  cancelListing,
+  ListingWithPoster,
+  ListingStatus,
+  ListingType,
+} from '@/services/data';
 
 const STATUS: Record<ListingStatus, { label: string; variant: 'outline' | 'want' | 'default' }> = {
   active: { label: 'LIVE', variant: 'outline' },
@@ -15,9 +29,12 @@ const STATUS: Record<ListingStatus, { label: string; variant: 'outline' | 'want'
   cancelled: { label: 'TAKEN DOWN', variant: 'default' },
 };
 
+type Which = 'all' | ListingType;
+
 export default function MyListingsScreen() {
   const session = useSession();
   const listings = useAsync(myListings, []);
+  const [which, setWhich] = useState<Which>('all');
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,9 +49,17 @@ export default function MyListingsScreen() {
   if (!session) return <Redirect href="/signin" />;
 
   const rows = listings.data ?? [];
+  // Counts come from everything you posted, not the current filter -- a tab
+  // that reads "(0)" is the reason to not bother tapping it.
+  const counts = {
+    all: rows.length,
+    sell: rows.filter((l) => l.type === 'sell').length,
+    ask: rows.filter((l) => l.type === 'ask').length,
+  };
+  const filtered = which === 'all' ? rows : rows.filter((l) => l.type === which);
   // Live first, then in-progress, then history.
   const rank = (s: ListingStatus) => (s === 'active' ? 0 : s === 'locked' ? 1 : 2);
-  const sorted = [...rows].sort((a, b) => rank(a.status) - rank(b.status));
+  const sorted = [...filtered].sort((a, b) => rank(a.status) - rank(b.status));
 
   const takeDown = async (id: string) => {
     if (confirming !== id) {
@@ -57,6 +82,19 @@ export default function MyListingsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.frame}>
+        {/* Same control and wording as the feed: these split the same two
+            listing types, so they should not look like different ideas. */}
+        <SegmentedFilter
+          value={which}
+          onChange={setWhich}
+          options={[
+            { value: 'all', label: 'All', count: counts.all },
+            { value: 'sell', label: 'For sale', count: counts.sell },
+            { value: 'ask', label: 'Wanted', count: counts.ask },
+          ]}
+          style={styles.filter}
+        />
+
         {!!error && (
           <Text variant="small" tone="destructive" style={styles.error}>
             {error}
@@ -153,6 +191,7 @@ export default function MyListingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  filter: { marginHorizontal: space[5], marginTop: space[4], marginBottom: space[2] },
   frame: { flex: 1, width: '100%', maxWidth: maxContentWidth, alignSelf: 'center' },
   centered: { alignItems: 'center', justifyContent: 'center', flexGrow: 1, padding: space[6] },
   error: { margin: space[5] },

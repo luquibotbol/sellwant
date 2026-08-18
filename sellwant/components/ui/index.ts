@@ -7,6 +7,8 @@ export { default as Badge } from '@/components/ui/Badge';
 export { default as Input } from '@/components/ui/Input';
 export { default as DateField } from '@/components/ui/DateField';
 export { default as LocationField } from '@/components/ui/LocationField';
+export { default as SegmentedFilter } from '@/components/ui/SegmentedFilter';
 export { Skeleton, Separator, EmptyState, ErrorState } from '@/components/ui/Feedback';
 export type { ButtonVariant, ButtonSize } from '@/components/ui/Button';
 export type { BadgeVariant } from '@/components/ui/Badge';
+export type { Segment } from '@/components/ui/SegmentedFilter';

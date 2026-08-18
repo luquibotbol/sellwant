@@ -9,8 +9,10 @@ import {
   Button,
   EmptyState,
   ErrorState,
+  SegmentedFilter,
 } from '@/components/ui';
 import { colors, space, radius, maxContentWidth } from '@/constants/theme';
+import { sideOf, Side as OfferSide } from '@/lib/offer-side';
 import { money } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
@@ -24,6 +26,8 @@ import {
 } from '@/services/data';
 
 type Tab = 'received' | 'sent';
+/** 'all' is a filter state; the other two come from lib/offer-side. */
+type Side = 'all' | OfferSide;
 
 const STATUS_VARIANT: Record<string, 'default' | 'want' | 'destructive' | 'outline'> = {
   open: 'outline',
@@ -35,6 +39,7 @@ const STATUS_VARIANT: Record<string, 'default' | 'want' | 'destructive' | 'outli
 export default function OffersScreen() {
   const session = useSession();
   const [tab, setTab] = useState<Tab>('received');
+  const [side, setSide] = useState<Side>('all');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,8 +55,16 @@ export default function OffersScreen() {
   }
   if (!session) return <Redirect href="/signin" />;
 
+  const me = session.user.id;
   const active = tab === 'received' ? received : sent;
-  const rows = active.data ?? [];
+  const all = active.data ?? [];
+  // Counted before filtering, so an empty side is visible without tapping it.
+  const counts = {
+    all: all.length,
+    buying: all.filter((o) => sideOf(o, me) === 'buying').length,
+    selling: all.filter((o) => sideOf(o, me) === 'selling').length,
+  };
+  const rows = side === 'all' ? all : all.filter((o) => sideOf(o, me) === side);
   const openReceived = (received.data ?? []).filter((o) => o.status === 'open').length;
 
   const run = async (id: string, fn: () => Promise<unknown>) => {
@@ -90,6 +103,17 @@ export default function OffersScreen() {
           })}
         </View>
 
+        <SegmentedFilter
+          value={side}
+          onChange={setSide}
+          options={[
+            { value: 'all', label: 'All', count: counts.all },
+            { value: 'buying', label: 'Buying', count: counts.buying },
+            { value: 'selling', label: 'Selling', count: counts.selling },
+          ]}
+          style={styles.sideFilter}
+        />
+
         {!!error && (
           <Text variant="small" tone="destructive" style={styles.error}>
             {error}
@@ -103,27 +127,44 @@ export default function OffersScreen() {
             <ActivityIndicator color={colors.mutedForeground} />
           </View>
         ) : rows.length === 0 ? (
-          <EmptyState
-            title={tab === 'received' ? 'No offers yet' : "You haven't offered on anything"}
-            body={
-              tab === 'received'
-                ? 'When someone offers on something you posted, it shows up here.'
-                : 'Find a ticket and name your price — offers are public, so everyone can see the going rate.'
-            }
-            actionLabel="Browse listings"
-            onAction={() => router.push('/feed')}
-          />
+          side !== 'all' && all.length > 0 ? (
+            // There are offers here, just none on this side. Saying "no offers
+            // yet" would be a lie, and hiding the way back out would be worse.
+            <EmptyState
+              title={`Nothing where you're ${side}`}
+              body={`You have ${all.length} ${all.length === 1 ? 'offer' : 'offers'} on this tab, but none on that side of the trade.`}
+              actionLabel="Show all"
+              onAction={() => setSide('all')}
+            />
+          ) : (
+            <EmptyState
+              title={tab === 'received' ? 'No offers yet' : "You haven't offered on anything"}
+              body={
+                tab === 'received'
+                  ? 'When someone offers on something you posted, it shows up here.'
+                  : 'Find a ticket and name your price — offers are public, so everyone can see the going rate.'
+              }
+              actionLabel="Browse listings"
+              onAction={() => router.push('/feed')}
+            />
+          )
         ) : (
           <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
             {rows.map((o: OfferWithListing) => {
-              const selling = o.listing?.type === 'sell';
+              // Colour and wording follow YOUR side of this trade, not the
+              // listing's type -- the same rule the deal header uses. On the
+              // offers screen "am I buying or selling here" is the question,
+              // and the listing type answers it differently depending on
+              // whether the listing is yours.
+              const mySide = sideOf(o, me);
+              const buying = mySide === 'buying';
               const isOpen = o.status === 'open';
               const working = busy === o.id;
 
               return (
                 <Card
                   key={o.id}
-                  accent={selling ? 'sell' : 'want'}
+                  accent={buying ? 'want' : 'sell'}
                   style={styles.card}
                   onPress={
                     o.listing ? () => router.push(`/event/${o.listing!.id}` as never) : undefined
@@ -133,7 +174,7 @@ export default function OffersScreen() {
                     <Text variant="bodyMedium" style={styles.cardTitle} numberOfLines={1}>
                       {o.listing?.title ?? 'Listing removed'}
                     </Text>
-                    <Text variant="heading" tone={selling ? 'sell' : 'want'}>
+                    <Text variant="heading" tone={buying ? 'want' : 'sell'}>
                       {money(o.amount_cents)}
                     </Text>
                   </View>
@@ -151,10 +192,17 @@ export default function OffersScreen() {
                         {o.listing ? `Listed at ${money(o.listing.price_cents)}` : ''}
                       </Text>
                     )}
-                    <Badge
-                      label={o.status.toUpperCase()}
-                      variant={STATUS_VARIANT[o.status] ?? 'default'}
-                    />
+                    <View style={styles.tail}>
+                      {!!mySide && (
+                        <Text variant="caption" tone="subtle">
+                          {buying ? "You're buying" : "You're selling"}
+                        </Text>
+                      )}
+                      <Badge
+                        label={o.status.toUpperCase()}
+                        variant={STATUS_VARIANT[o.status] ?? 'default'}
+                      />
+                    </View>
                   </View>
 
                   {!!o.message && (
@@ -242,6 +290,8 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, alignItems: 'center', paddingVertical: space[2], borderRadius: radius.md },
   tabActive: { backgroundColor: colors.muted },
+  tail: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
+  sideFilter: { marginHorizontal: space[5], marginBottom: space[3] },
   error: { marginHorizontal: space[5], marginBottom: space[3] },
   list: { paddingHorizontal: space[5], paddingBottom: space[16] },
   card: { marginBottom: space[3] },
