@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { Redirect, router } from 'expo-router';
+import Head from 'expo-router/head';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Text,
@@ -72,9 +73,27 @@ export default function FeedScreen() {
 
   const searching = !!debounced || categoryId !== null;
 
+  // The site's default metadata, not just the feed's. expo-router keeps the
+  // initial route mounted beneath every screen, so this Head wins everywhere
+  // -- which is why per-route overrides are applied by the Worker instead of
+  // by each screen, where they would silently lose this fight.
+  const head = (
+    <Head>
+      <title>Buy and sell event tickets — SellWant</title>
+      <meta
+        name="description"
+        content="Free marketplace for student event tickets. Browse what people are selling, post what you're looking for, and see the going rate before you commit. No fees, no commission."
+      />
+      {/* `/` and `/feed` render the same screen. Pointing both at the apex
+          stops them competing as duplicates. */}
+      <link rel="canonical" href="https://sellwant.com/" />
+    </Head>
+  );
+
   if (session === undefined || me.loading) {
     return (
       <View style={[styles.container, styles.centered]}>
+        {head}
         <ActivityIndicator color={colors.mutedForeground} />
       </View>
     );
@@ -90,6 +109,7 @@ export default function FeedScreen() {
 
   return (
     <View style={styles.container}>
+      {head}
       <View style={styles.frame}>
         <View style={[styles.header, { paddingTop: insets.top + space[4] }]}>
           <Wordmark size="title" animate />

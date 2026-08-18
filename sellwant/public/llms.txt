@@ -1,61 +1,83 @@
 # SellWant
 
-> A two-sided marketplace for event tickets, mostly student parties, formals
-> and concerts. People post tickets they are selling **and** tickets they are
-> looking for. Offers are public, so the going rate is visible before anyone
-> commits. SellWant never touches the money and never holds the ticket.
+> A free two-sided marketplace for event tickets — student parties, formals,
+> concerts. People post tickets they are **selling** and tickets they are
+> **looking for**. Offers are public, so the going rate is visible before
+> anyone commits. There are no fees, no commission, and no booking charge:
+> SellWant never touches the money and never holds the ticket.
 
-## How the model works
+## What makes it different
 
-Two listing types, and the distinction matters:
+**It is free.** No listing fee, no seller fee, no buyer fee, no service
+charge, no payment processing cut. The two people agree a price and pay each
+other directly, usually Venmo or Zelle. SellWant is not a payment processor
+and takes nothing.
+
+**Both sides are public.** Most ticket sites show only what sellers are
+asking. Here you can also see what buyers are offering, and every offer and
+counter-offer on a listing is visible. That is the point: it turns a private
+haggle in a group chat into a visible market price.
+
+**No `.edu` requirement.** Anyone can post or buy.
+
+## The model
+
+Two listing types, and the distinction matters when reading a page:
 
 - **sell** — someone has a ticket and names a price. Marked up as
   `schema.org/Offer`.
 - **want** — someone needs a ticket and names what they will pay. Marked up as
-  `schema.org/Demand`. This is not a product page with no stock; it is a
-  standing request, and answering it means offering to sell.
+  `schema.org/Demand`. This is not a product page that is out of stock; it is
+  a standing request, and answering it means offering to sell.
 
-Anyone may post either. There is no `.edu` requirement.
-
-**Offers are public.** Any signed-in person can offer on a listing, and the
-poster can counter. The highest offer on a sell listing, and the lowest on a
-want listing, are shown as the going rate. A counter from the poster is
-displayed but deliberately excluded from that figure: it is their own asking
-price, not evidence of demand.
+The headline figure on a listing is the **going rate**: the highest offer on a
+sell listing, the lowest on a want listing. A counter-offer from the person
+who posted the listing is shown but excluded from that figure — it is their
+own asking price, not evidence of demand.
 
 **Money never moves through SellWant.** "Buying" means agreeing a price and a
-place to meet. Payment happens directly between the two people, usually Venmo
-or Zelle, and the platform cannot see, verify, hold or refund it.
+place to meet. The platform cannot see, verify, hold, or refund a payment, and
+there is nothing to charge a fee on.
 
-**The handoff is physical.** Tickets are typically static QR codes that cannot
+**The handoff is physical.** Tickets are usually static QR codes that cannot
 be transferred, so the seller keeps a working copy. The two people meet and
 scan in together. There is no digital delivery.
 
-## What this means for an agent
+## For agents
 
-An agent can usefully **find, compare, and negotiate**: search listings, read
+Reading is open and unauthenticated:
+
+- [All active listings as JSON](https://sellwant.com/api/listings.json) — id,
+  url, type, price, going rate, offer count, date, location
+- [Sitemap](https://sellwant.com/sitemap.xml) — every active listing URL
+- [Feed](https://sellwant.com/) — the same market as HTML
+- Listing pages carry JSON-LD: `Event` with either `Offer` or `Demand`
+
+An agent can usefully **find, compare and negotiate**: search listings, read
 the going rate, draft an offer for its person to approve.
 
 An agent **cannot complete a trade**. Someone has to turn up at a door. Any
-flow that ends in "purchased" is wrong; the honest end state is "a price is
+flow ending in "purchased" is wrong; the honest end state is "a price is
 agreed and a meeting is arranged".
 
-There is no public write API yet. Reading is open and unauthenticated; posting
-and offering require a signed-in account through the site.
+### What does not exist yet
 
-## Data
+Being explicit so nothing is attempted that cannot work:
 
-- [Feed](https://sellwant.com/): every active listing, rendered server-side
-- [Sitemap](https://sellwant.com/sitemap.xml): every active listing URL
-- Listing pages carry JSON-LD (`Event` with `Offer` or `Demand`)
+- **There is no write API.** Posting a listing, making an offer, accepting one
+  — all require a signed-in person using the site.
+- **There is no MCP server yet.** One is intended, so that an agent can search
+  and draft offers on its person's behalf. Anything committing money will need
+  that person's explicit approval, because the counterparty is a stranger and
+  the payment is irreversible.
 
 Only **active** listings are exposed anywhere. Sold and cancelled ones are
-withheld on purpose: a completed trade's price is private to the two people
-who made it.
+withheld deliberately: a completed trade's price belongs to the two people who
+made it.
 
 ## Optional
 
-- [Sign in](https://sellwant.com/signin): required to post or offer
-- Identity — names, Instagram handles, handoff counts — is visible only to
-  signed-in people, and contact details only to the two parties in a deal.
-  Nothing here exposes them.
+- [Sign in](https://sellwant.com/signin) — needed to post or offer, never to browse
+- Identity (names, Instagram handles, completed-handoff counts) is visible
+  only to signed-in people. Contact details are visible only to the two
+  parties in an agreed deal. Nothing in the public data exposes either.

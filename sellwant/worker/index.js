@@ -250,6 +250,189 @@ function withListingData(response, listing, url) {
 }
 
 /**
+ * Per-route metadata.
+ *
+ * Applied here rather than by each screen because expo-router keeps the
+ * initial route mounted underneath every other one, so its <Head> wins and a
+ * per-screen override is silently discarded. The Worker knows the path for
+ * certain.
+ */
+const ROUTE_META = {
+  '/signin': {
+    title: 'Sign in — SellWant',
+    description:
+      'Sign in to make offers and post tickets on SellWant. Browsing is free and needs no account.',
+    canonical: '/signin',
+  },
+};
+
+function withRouteMeta(response, meta, origin) {
+  const set = (v) => ({ element(el) { el.setAttribute('content', v); } });
+  return new HTMLRewriter()
+    .on('title', { element(el) { el.setInnerContent(meta.title); } })
+    .on('meta[name="description"]', set(meta.description))
+    .on('meta[property="og:title"]', set(meta.title))
+    .on('meta[property="og:description"]', set(meta.description))
+    .on('meta[name="twitter:title"]', set(meta.title))
+    .on('meta[name="twitter:description"]', set(meta.description))
+    .on('link[rel="canonical"]', {
+      element(el) { el.setAttribute('href', `${origin}${meta.canonical}`); },
+    })
+    .transform(response);
+}
+
+/** Every active listing, newest first. Shared by the feed injection and the
+ *  JSON endpoint so they can never describe different markets. */
+async function fetchActive(env, limit = 100) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return [];
+  try {
+    const res = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/listings` +
+        `?select=id,title,type,price_cents,event_date,location,best_offer_cents,offer_count` +
+        `&status=eq.active&order=created_at.desc&limit=${limit}`,
+      { headers: { apikey: env.SUPABASE_ANON_KEY }, signal: AbortSignal.timeout(3000) }
+    );
+    if (!res.ok) return [];
+    const rows = await res.json();
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The feed as plain HTML and as an ItemList.
+ *
+ * The homepage is the page most likely to be crawled and was the emptiest --
+ * one character of body text, because the app renders client-side. Without
+ * this, a search engine or model knows the site exists and nothing about what
+ * is on it.
+ */
+function feedInjection(rows, origin) {
+  const items = rows.slice(0, 40);
+
+  const html =
+    `<noscript><section><h1>Tickets on SellWant</h1>` +
+    `<p>A free marketplace for event tickets. People post tickets they are ` +
+    `selling and tickets they are looking for. No fees and no commission -- ` +
+    `SellWant never handles the money.</p>` +
+    (items.length
+      ? `<ul>` +
+        items
+          .map((l) => {
+            const selling = l.type === 'sell';
+            const bits = [
+              esc(plain(l.title, 100)),
+              selling ? 'for sale' : 'wanted',
+              esc(money(l.price_cents)),
+              l.event_date ? esc(pretty(l.event_date)) : '',
+              l.location ? esc(plain(l.location, 80)) : '',
+            ].filter(Boolean);
+            return `<li><a href="${origin}/event/${esc(l.id)}">${bits.join(' — ')}</a></li>`;
+          })
+          .join('') +
+        `</ul>`
+      : `<p>No live listings right now.</p>`) +
+    `</section></noscript>`;
+
+  const itemList = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'Active ticket listings on SellWant',
+    numberOfItems: items.length,
+    itemListElement: items.map((l, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      url: `${origin}/event/${l.id}`,
+      name: plain(l.title, 100),
+    })),
+  };
+
+  // Identity for the site itself, so a model can attribute what it reads.
+  const site = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebSite',
+        '@id': `${origin}/#website`,
+        url: `${origin}/`,
+        name: 'SellWant',
+        description:
+          'A free two-sided marketplace for event tickets. Buy what you want, sell what you have.',
+        inLanguage: 'en',
+      },
+      {
+        '@type': 'Organization',
+        '@id': `${origin}/#org`,
+        name: 'SellWant',
+        url: `${origin}/`,
+        logo: `${origin}/og.png`,
+      },
+    ],
+  };
+
+  return {
+    html,
+    ld: [JSON.stringify(site), JSON.stringify(itemList)]
+      .map((j) => j.replace(/</g, '\\u003c'))
+      .join('</script><script type="application/ld+json">'),
+  };
+}
+
+function withFeedData(response, rows, origin) {
+  const { html, ld } = feedInjection(rows, origin);
+  return new HTMLRewriter()
+    .on('head', {
+      element(el) {
+        el.append(`<script type="application/ld+json">${ld}</script>`, { html: true });
+      },
+    })
+    .on('body', { element(el) { el.prepend(html, { html: true }); } })
+    .transform(response);
+}
+
+/**
+ * Every active listing as JSON.
+ *
+ * Documented in llms.txt so an agent has one stable place to read the market,
+ * rather than reverse-engineering Supabase's REST shape from the bundle --
+ * which works today and would tie the public contract to our database.
+ */
+async function listingsJson(env, origin) {
+  const rows = await fetchActive(env, 200);
+  const body = JSON.stringify(
+    {
+      site: 'SellWant',
+      docs: `${origin}/llms.txt`,
+      note: 'Read-only. Posting and offering require a signed-in account.',
+      count: rows.length,
+      listings: rows.map((l) => ({
+        id: l.id,
+        url: `${origin}/event/${l.id}`,
+        title: l.title,
+        // "sell" means someone has a ticket; "want" means someone needs one.
+        type: l.type === 'sell' ? 'sell' : 'want',
+        price_usd: l.price_cents / 100,
+        going_rate_usd: l.best_offer_cents == null ? null : l.best_offer_cents / 100,
+        offers: l.offer_count ?? 0,
+        event_date: l.event_date,
+        location: l.location,
+      })),
+    },
+    null,
+    2
+  );
+  return new Response(body, {
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'public, max-age=0, s-maxage=60',
+      // Public data, so let a browser-based agent read it cross-origin.
+      'access-control-allow-origin': '*',
+    },
+  });
+}
+
+/**
  * Every active listing as a sitemap.
  *
  * Same active-only rule as the feed, so sold and cancelled listings stay out --
@@ -326,15 +509,44 @@ export default {
     const canonical = canonicalTarget(request.url);
     if (canonical) return Response.redirect(canonical, 301);
 
-    // Generated, not a static file: it has to list live listings.
+    // Generated, not static files: both describe live listings.
     if (url.pathname === '/sitemap.xml') return sitemap(env, url.origin);
+    if (url.pathname === '/api/listings.json') return listingsJson(env, url.origin);
 
     // With run_worker_first the platform no longer tries assets before us, so
     // do it here. Anything that matches a real file -- every page, script,
     // font and image -- is served exactly as before; only a miss falls through
     // to the rewrite below. not_found_handling is "none", so a miss is a 404.
     const asset = await env.ASSETS.fetch(request);
-    if (asset.status !== 404) return asset;
+    if (asset.status !== 404) {
+      // The feed renders client-side, so its prerendered body is one
+      // character -- and it is the page most likely to be crawled. Inject the
+      // current market into it, cached like the listing pages.
+      if (url.pathname === '/' || url.pathname === '/feed') {
+        const key = new Request(`${url.origin}/__feed_seo${url.pathname}`, { method: 'GET' });
+        const hitCache = await caches.default.match(key);
+        if (hitCache) return hitCache;
+
+        const rows = await fetchActive(env, 100);
+        // With nothing to say, say nothing rather than an empty list.
+        if (!rows.length) return asset;
+
+        const enriched = withFeedData(asset, rows, url.origin);
+        const out = new Response(enriched.body, {
+          status: 200,
+          headers: enriched.headers,
+        });
+        out.headers.set('cache-control', 'public, max-age=0, s-maxage=60');
+        ctx.waitUntil(caches.default.put(key, out.clone()));
+        return out;
+      }
+      const meta = ROUTE_META[url.pathname];
+      if (meta) {
+        const out = withRouteMeta(asset, meta, url.origin);
+        return new Response(out.body, { status: 200, headers: out.headers });
+      }
+      return asset;
+    }
 
     const [, head, tail, ...rest] = url.pathname.split('/');
 
