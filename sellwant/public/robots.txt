@@ -1,14 +1,18 @@
-# SellWant — a two-sided marketplace for event tickets.
-# Machine-readable summary: https://sellwant.com/llms.txt
+# SellWant — a free two-sided marketplace for event tickets.
+# No fees, no commission. Buy what you want, sell what you have.
+#
+# Machine-readable summary:  https://sellwant.com/llms.txt
+# All active listings, JSON: https://sellwant.com/api/listings.json
 
 Sitemap: https://sellwant.com/sitemap.xml
 
 User-agent: *
 Allow: /
+Allow: /api/listings.json
 
-# Private surfaces. These already require a session and redirect when signed
-# out, but saying so here keeps them out of indexes and out of the crawl
-# budget rather than relying on a redirect to imply it.
+# Private surfaces. They already require a session and redirect when signed
+# out, but naming them keeps them out of indexes and out of crawl budget
+# rather than relying on a redirect to imply it.
 Disallow: /deal/
 Disallow: /deals
 Disallow: /u/
@@ -16,17 +20,21 @@ Disallow: /offers
 Disallow: /my-listings
 Disallow: /profile
 Disallow: /onboarding
-Disallow: /signin
 Disallow: /auth/
 
-# Content signals (https://contentsignals.org). These say what may be done
-# with what is collected, and are deliberately different answers:
+# Sign-in is a dead end for a crawler -- no content, and it is not the page
+# anyone should arrive on from a search.
+Disallow: /signin
+
+# Content signals (https://contentsignals.org). Deliberately different
+# answers to three different questions:
 #
-#   search=yes    index the listings; being findable is the point.
+#   search=yes    index the listings. Being findable is the entire point.
 #   ai-input=yes  ground live answers on them. A model that can answer
-#                 "who's selling a ticket to X" is doing our distribution.
+#                 "who is selling a ticket to X this weekend" is doing our
+#                 distribution for us, and the data is public either way.
 #   ai-train=no   listings are other people's plans and prices, posted to
-#                 trade this weekend, not to become training data. Reading
-#                 them now is useful to us; keeping them forever is not, and
-#                 it is not ours to grant.
+#                 trade this weekend and then irrelevant. Reading them now
+#                 helps everyone; keeping them permanently in a model helps
+#                 nobody here, and it is not ours to grant on their behalf.
 Content-Signal: search=yes, ai-input=yes, ai-train=no
