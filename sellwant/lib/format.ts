@@ -51,3 +51,25 @@ export function whenAndWhere(date: string | null, location: string | null): stri
   if (location) parts.push(location);
   return parts.join(' · ');
 }
+
+/**
+ * How long ago something happened.
+ *
+ * Deliberately not relativeDate, which answers "when is this party" and says
+ * "Tonight" or "Tomorrow". That vocabulary points forwards, so a report filed
+ * "Tonight" reads as though it has not happened yet -- and relativeDate parses
+ * a plain YYYY-MM-DD, so handing it a timestamptz shifts the day.
+ */
+export function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (secs < 45) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(then).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}

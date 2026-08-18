@@ -28,6 +28,10 @@ Disallow: /auth/
 # anyone should arrive on from a search.
 Disallow: /signin
 
+# Founder-only. Access is enforced in the database; this just keeps it out
+# of indexes.
+Disallow: /admin
+
 # Content signals (https://contentsignals.org). Deliberately different
 # answers to three different questions:
 #

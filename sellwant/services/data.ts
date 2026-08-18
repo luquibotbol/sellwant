@@ -845,3 +845,69 @@ export async function myLockIns(): Promise<LockIn[]> {
   if (error) await fail(error);
   return (data ?? []) as LockIn[];
 }
+
+// ---------------------------------------------------------------- admin
+
+/**
+ * Founder-only surfaces.
+ *
+ * Every one of these is a SECURITY DEFINER function that checks membership of
+ * the `admins` table before doing anything, so the boundary is in the database
+ * and cannot be widened by editing a screen. A non-admin gets an exception,
+ * not empty data -- silently returning zeroes would render a working-looking
+ * dashboard for someone with no right to it.
+ */
+export interface AdminStats {
+  generated_at: string;
+  users: { total: number; last_7d: number; last_24h: number; confirmed: number; via_google: number; active_7d: number };
+  funnel: { signed_up: number; onboarded: number; posted: number; offered: number; in_a_deal: number; confirmed: number };
+  listings: { total: number; active: number; locked: number; sold: number; cancelled: number; for_sale: number; wanted: number; last_7d: number };
+  offers: { total: number; open: number; accepted: number; declined: number; withdrawn: number; last_7d: number };
+  deals: { total: number; in_progress: number; confirmed: number; cancelled: number; cancelled_after_paying: number; value_confirmed_cents: number };
+  safety: { reports_total: number; reports_open: number; suspended: number; duplicate_codes: number; duplicate_codes_other_seller: number };
+}
+
+export interface AdminReport {
+  id: string;
+  body: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+  outcome: string | null;
+  reporter_id: string;
+  reporter_name: string | null;
+  subject_id: string;
+  subject_name: string | null;
+  subject_suspended: boolean;
+  subject_deals: number;
+  listing_id: string | null;
+  listing_title: string | null;
+}
+
+/** Null when the caller is not an admin, so the screen can 404 rather than
+ *  render an error that confirms the page exists. */
+export async function adminStats(): Promise<AdminStats | null> {
+  const { data, error } = await supabase.rpc('admin_stats');
+  if (error) return null;
+  return data as AdminStats;
+}
+
+export async function adminReports(includeReviewed = false): Promise<AdminReport[]> {
+  const { data, error } = await supabase.rpc('admin_reports', {
+    p_include_reviewed: includeReviewed,
+  });
+  if (error) return [];
+  return (data ?? []) as AdminReport[];
+}
+
+export async function adminReviewReport(id: string, outcome: string) {
+  const { error } = await supabase.rpc('admin_review_report', { p_id: id, p_outcome: outcome });
+  if (error) await fail(error);
+}
+
+export async function adminSetSuspended(userId: string, suspended: boolean) {
+  const { error } = await supabase.rpc('admin_set_suspended', {
+    p_user: userId,
+    p_suspended: suspended,
+  });
+  if (error) await fail(error);
+}

@@ -302,3 +302,71 @@ describe('offer stats — only the other side counts', () => {
     expect(rows.some((r: { from_user: string }) => r.from_user === SELLER.id)).toBe(true);
   });
 });
+
+/**
+ * The admin boundary.
+ *
+ * These functions are SECURITY DEFINER -- they read across every table,
+ * bypassing the RLS that protects one user's data from another. The only thing
+ * standing between that and any signed-in person is a membership check on the
+ * first line of each. Asserting it in JS would prove nothing; these call the
+ * real RPCs as a real, non-admin user.
+ *
+ * Maya is deliberately not an admin.
+ */
+describe('admin functions — only admins', () => {
+  const rpc = async (tok: string | null, fn: string, body: Record<string, unknown> = {}) => {
+    const r = await fetch(`${URL}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: tok
+        ? hdrs(tok)
+        : { apikey: KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const text = await r.text();
+    return { status: r.status, body: text ? JSON.parse(text) : null };
+  };
+
+  test('a signed-in non-admin gets nothing from admin_stats', async () => {
+    const res = await rpc(buyerTok, 'admin_stats');
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(JSON.stringify(res.body)).toMatch(/not authorised/i);
+  });
+
+  test('a signed-in non-admin cannot read the report queue', async () => {
+    const res = await rpc(buyerTok, 'admin_reports');
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(JSON.stringify(res.body)).toMatch(/not authorised/i);
+  });
+
+  test('a signed-in non-admin cannot suspend anyone', async () => {
+    const res = await rpc(buyerTok, 'admin_set_suspended', {
+      p_user: SELLER.id,
+      p_suspended: true,
+    });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    // And it must not have happened.
+    const p = (await rest(buyerTok, `profiles?select=is_suspended&id=eq.${SELLER.id}`)).body[0];
+    expect(p.is_suspended).toBe(false);
+  });
+
+  test('a signed-in non-admin cannot close a report', async () => {
+    const res = await rpc(buyerTok, 'admin_review_report', {
+      p_id: '00000000-0000-4000-8000-000000000000',
+      p_outcome: 'nope',
+    });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+
+  test('anonymous gets nothing either', async () => {
+    const res = await rpc(null, 'admin_stats');
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+
+  test('the admin roster is not readable by a non-admin', async () => {
+    // Empty rather than an error: the policy hides the rows, and revealing
+    // who the admins are is itself information.
+    const res = await rest(buyerTok, 'admins?select=id');
+    expect(res.body).toEqual([]);
+  });
+});
