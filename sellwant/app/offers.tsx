@@ -48,7 +48,7 @@ export default function OffersScreen() {
       </View>
     );
   }
-  if (!session) return <Redirect href="/" />;
+  if (!session) return <Redirect href="/signin" />;
 
   const active = tab === 'received' ? received : sent;
   const rows = active.data ?? [];

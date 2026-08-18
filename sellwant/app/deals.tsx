@@ -27,7 +27,7 @@ export default function DealsScreen() {
       </View>
     );
   }
-  if (!session) return <Redirect href="/" />;
+  if (!session) return <Redirect href="/signin" />;
 
   const me = session.user.id;
   const rows = deals.data ?? [];

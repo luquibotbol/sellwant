@@ -89,7 +89,7 @@ export default function ResetPasswordScreen() {
               title="Back to sign in"
               variant="outline"
               block
-              onPress={() => router.replace('/')}
+              onPress={() => router.replace('/signin')}
               style={styles.action}
             />
           </Card>

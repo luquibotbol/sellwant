@@ -25,7 +25,7 @@ export default function OnboardingScreen() {
   const [formError, setFormError] = useState<string | null>(null);
 
   if (profile.loading) return <View style={styles.container} />;
-  if (!profile.data) return <Redirect href="/" />;
+  if (!profile.data) return <Redirect href="/signin" />;
   // Already done -- don't trap people here on a refresh.
   if (profile.data.onboarded_at) return <Redirect href={onward as never} />;
 

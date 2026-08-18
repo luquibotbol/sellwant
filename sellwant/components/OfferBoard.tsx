@@ -216,7 +216,7 @@ export function OfferBoard({ listing, meId, onSettled }: Props) {
             block
             onPress={() =>
               router.push(
-                `/?returnTo=${encodeURIComponent(`/event/${listing.id}`)}` as never
+                `/signin?returnTo=${encodeURIComponent(`/event/${listing.id}`)}` as never
               )
             }
             style={styles.signInAction}

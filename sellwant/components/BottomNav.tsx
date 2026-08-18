@@ -18,7 +18,7 @@ import { colors, space, radius, maxContentWidth } from '@/constants/theme';
  * sign-in, onboarding, and the auth callback.
  */
 const TABS = [
-  { href: '/feed', label: 'Browse', match: ['/feed', '/event'] },
+  { href: '/feed', label: 'Browse', match: ['/', '/feed', '/event'] },
   { href: '/deals', label: 'Deals', match: ['/deals', '/deal'] },
   { href: '/offers', label: 'Offers', match: ['/offers'] },
   { href: '/profile', label: 'You', match: ['/profile', '/my-listings', '/u'] },
@@ -30,12 +30,12 @@ const TABS = [
  * can do and the one thing we want them to do.
  */
 const ANON_TABS = [
-  { href: '/feed', label: 'Browse', match: ['/feed', '/event'] },
-  { href: '/', label: 'Sign in', match: [] as string[] },
+  { href: '/feed', label: 'Browse', match: ['/', '/feed', '/event'] },
+  { href: '/signin', label: 'Sign in', match: ['/signin'] },
 ] as const;
 
 const HIDDEN_ON = [
-  '/',
+  '/signin',
   '/onboarding',
   '/auth/callback',
   '/auth/reset',

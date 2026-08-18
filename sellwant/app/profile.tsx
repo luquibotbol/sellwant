@@ -53,7 +53,7 @@ export default function ProfileScreen() {
       </View>
     );
   }
-  if (!profile.data) return <Redirect href="/" />;
+  if (!profile.data) return <Redirect href="/signin" />;
 
   const me = profile.data;
   const contact = myContact.data;
@@ -256,7 +256,7 @@ export default function ProfileScreen() {
         style={styles.signOut}
         onPress={async () => {
           await signOut();
-          router.replace('/');
+          router.replace('/signin');
         }}
       />
     </ScrollView>

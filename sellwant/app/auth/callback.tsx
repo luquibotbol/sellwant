@@ -93,7 +93,7 @@ export default function AuthCallback() {
             <Button
               title="Back to sign in"
               variant="outline"
-              onPress={() => router.replace('/')}
+              onPress={() => router.replace('/signin')}
               style={styles.button}
             />
           </>

@@ -68,7 +68,7 @@ export default function ListingDetailScreen() {
   // but every action still needs an account. Sending the listing along means
   // signing in returns you here rather than dumping you on an empty feed.
   const anon = !session.data;
-  const signInHere = `/?returnTo=${encodeURIComponent(`/event/${l.id}`)}`;
+  const signInHere = `/signin?returnTo=${encodeURIComponent(`/event/${l.id}`)}`;
 
   const lockIn = async () => {
     setLockError(null);

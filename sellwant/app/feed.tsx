@@ -206,7 +206,7 @@ export default function FeedScreen() {
                   body="Post a ticket you're selling, or ask for one you want."
                   actionLabel={anon ? 'Sign in to post' : 'Post a listing'}
                   onAction={() =>
-                    router.push(anon ? '/?returnTo=%2Fcreate-event' : '/create-event')
+                    router.push(anon ? '/signin?returnTo=%2Fcreate-event' : '/create-event')
                   }
                 />
               )
@@ -270,7 +270,7 @@ export default function FeedScreen() {
       <Pressable
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
         onPress={() =>
-          router.push(anon ? '/?returnTo=%2Fcreate-event' : '/create-event')
+          router.push(anon ? '/signin?returnTo=%2Fcreate-event' : '/create-event')
         }
       >
         <Text variant="title" tone="inverse" style={styles.fabPlus}>

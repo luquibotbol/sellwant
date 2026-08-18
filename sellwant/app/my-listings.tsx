@@ -29,7 +29,7 @@ export default function MyListingsScreen() {
       </View>
     );
   }
-  if (!session) return <Redirect href="/" />;
+  if (!session) return <Redirect href="/signin" />;
 
   const rows = listings.data ?? [];
   // Live first, then in-progress, then history.

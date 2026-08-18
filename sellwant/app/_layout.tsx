@@ -24,6 +24,14 @@ export const unstable_settings = {
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+/** Scrapers never run our JS, so these are baked into every prerendered page
+ *  rather than derived at runtime. Absolute, because relative og:image is
+ *  ignored by every major platform. */
+const SITE = 'https://sellwant.com';
+const BLURB =
+  'Buy what you want. Sell what you have. A two-sided marketplace for the ' +
+  'tickets your friends are already trading.';
+
 export default function RootLayout() {
   // Geist is most of what makes the UI read as Vercel-like, so hold the splash
   // until it resolves rather than flashing a system-font frame.
@@ -51,10 +59,28 @@ export default function RootLayout() {
             where it wins. Description drives the group-chat link preview. */}
         <Head>
           <title>SellWant</title>
-          <meta
-            name="description"
-            content="Buy what you want. Sell what you have. A two-sided marketplace for the tickets your friends are already trading."
-          />
+          <meta name="description" content={BLURB} />
+
+          {/* The whole distribution model is a link pasted into a group chat,
+              so the preview card is the product's first impression far more
+              often than the site is. og:image must be an absolute URL --
+              every scraper rejects a relative one, and it fails silently. */}
+          <meta property="og:type" content="website" />
+          <meta property="og:site_name" content="SellWant" />
+          <meta property="og:title" content="SellWant" />
+          <meta property="og:description" content={BLURB} />
+          <meta property="og:url" content={`${SITE}/`} />
+          <meta property="og:image" content={`${SITE}/og.png`} />
+          <meta property="og:image:width" content="1200" />
+          <meta property="og:image:height" content="630" />
+          <meta property="og:image:alt" content="SellWant — buy what you want, sell what you have" />
+
+          {/* Without summary_large_image the card renders as a thumbnail
+              beside text, which wastes the artwork entirely. */}
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content="SellWant" />
+          <meta name="twitter:description" content={BLURB} />
+          <meta name="twitter:image" content={`${SITE}/og.png`} />
         </Head>
         <StatusBar barStyle="light-content" backgroundColor={colors.background} />
         <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -67,8 +93,10 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: colors.background },
         }}
       >
+        {/* index re-exports the feed: `/` is the shop window, not a gate. */}
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="feed" options={{ headerShown: false }} />
+        <Stack.Screen name="signin" options={{ headerShown: false }} />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
         <Stack.Screen name="auth/reset" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
