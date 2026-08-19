@@ -145,7 +145,7 @@ export default function OffersScreen() {
                   : 'Find a ticket and name your price — offers are public, so everyone can see the going rate.'
               }
               actionLabel="Browse listings"
-              onAction={() => router.push('/feed')}
+              onAction={() => router.navigate('/feed')}
             />
           )
         ) : (

@@ -16,6 +16,7 @@ import Head from 'expo-router/head';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import BottomNav from '@/components/BottomNav';
 import { ErrorBoundary } from './error-boundary';
+import { installUrlCleaner } from '@/lib/clean-router-url';
 import { colors, type as typeScale } from '@/constants/theme';
 
 export const unstable_settings = {
@@ -23,6 +24,11 @@ export const unstable_settings = {
 };
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// At module scope, not in an effect: expo-router can navigate before the first
+// effect runs, and a parameter that flashes into the address bar is still one
+// somebody can copy.
+installUrlCleaner();
 
 /** Scrapers never run our JS, so these are baked into every prerendered page
  *  rather than derived at runtime. Absolute, because relative og:image is

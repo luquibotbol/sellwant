@@ -155,7 +155,7 @@ export default function ListingDetailScreen() {
       </Card>
 
       {anon && (
-        <Card style={styles.poster} onPress={() => router.push(signInHere as never)}>
+        <Card style={styles.poster} onPress={() => router.navigate(signInHere as never)}>
           <Text variant="bodyMedium">Sign in to see who&apos;s selling</Text>
           <Text variant="small" tone="muted" style={styles.posterMeta}>
             Names, Instagram handles and completed-handoff counts are only
@@ -300,7 +300,7 @@ export default function ListingDetailScreen() {
                   ? `Buy now at ${money(l.price_cents)}`
                   : 'I have one — respond'
             }
-            onPress={() => (anon ? router.push(signInHere as never) : lockIn())}
+            onPress={() => (anon ? router.navigate(signInHere as never) : lockIn())}
             loading={locking}
             block
           />

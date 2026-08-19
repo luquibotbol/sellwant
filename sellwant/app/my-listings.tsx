@@ -134,7 +134,7 @@ export default function MyListingsScreen() {
             title="You haven't posted anything"
             body="Sell a ticket you can't use, or ask for one you want."
             actionLabel="Post a listing"
-            onAction={() => router.push('/create-event')}
+            onAction={() => router.navigate('/create-event')}
           />
         ) : (
           <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
