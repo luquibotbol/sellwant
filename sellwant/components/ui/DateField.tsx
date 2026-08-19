@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Pressable, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Text from '@/components/ui/Text';
-import { toISODate, fromISODate } from '@/lib/format';
+import { toISODate, fromISODate, todayISO } from '@/lib/format';
 import Button from '@/components/ui/Button';
 import { colors, radius, space, control } from '@/constants/theme';
 
@@ -14,6 +14,14 @@ export interface DateFieldProps {
   error?: string;
   hint?: string;
   min?: string;
+  /**
+   * Offer "No date" as an explicit choice.
+   *
+   * Matters more here than on web: the platform picker has no way to clear
+   * itself, so without this a native listing could never be posted without a
+   * date at all.
+   */
+  allowNone?: boolean;
 }
 
 
@@ -30,8 +38,9 @@ function pretty(s: string) {
  * Native date field. Web resolves DateField.web.tsx instead, which uses the
  * browser's own date input.
  */
-export function DateField({ label, value, onChange, error, hint, min }: DateFieldProps) {
+export function DateField({ label, value, onChange, error, hint, min, allowNone }: DateFieldProps) {
   const [open, setOpen] = useState(false);
+  const none = allowNone && !value;
 
   return (
     <View style={styles.container}>
@@ -41,14 +50,38 @@ export function DateField({ label, value, onChange, error, hint, min }: DateFiel
         </Text>
       )}
 
-      <Pressable
-        onPress={() => setOpen(true)}
-        style={[styles.field, !!error && styles.errored]}
-      >
-        <Text variant="body" tone={value ? 'default' : 'subtle'}>
-          {pretty(value)}
-        </Text>
-      </Pressable>
+      {none ? (
+        <View style={styles.noneRow}>
+          <Text variant="body" tone="subtle">
+            No date
+          </Text>
+          <Button
+            title="Add a date"
+            variant="secondary"
+            size="sm"
+            onPress={() => onChange(min || todayISO())}
+          />
+        </View>
+      ) : (
+        <Pressable
+          onPress={() => setOpen(true)}
+          style={[styles.field, !!error && styles.errored]}
+        >
+          <Text variant="body" tone={value ? 'default' : 'subtle'}>
+            {pretty(value)}
+          </Text>
+        </Pressable>
+      )}
+
+      {allowNone && !none && !open && (
+        <Button
+          title="No date"
+          variant="ghost"
+          size="sm"
+          onPress={() => onChange('')}
+          style={styles.noneButton}
+        />
+      )}
 
       {open && (
         <>
@@ -98,6 +131,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[3],
   },
   errored: { borderColor: colors.destructive },
+  noneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space[3],
+    minHeight: control.lg,
+  },
+  noneButton: { alignSelf: 'flex-start', marginTop: space[2] },
   helper: { marginTop: space[2] },
 });
 
