@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Pressable, Platform } from 'react-native';
 import { usePathname, router } from 'expo-router';
 import { useSession } from '@/hooks/useSession';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Text from '@/components/ui/Text';
-import { colors, space, radius, maxContentWidth } from '@/constants/theme';
+import { colors, space, maxContentWidth } from '@/constants/theme';
+import { pendingCounts } from '@/services/data';
 
 /**
  * Primary navigation.
@@ -42,15 +43,56 @@ const HIDDEN_ON = [
   '/create-event',
 ];
 
-interface Props {
-  /** Optional counts, e.g. offers awaiting your response. */
-  badges?: Partial<Record<string, number>>;
-}
+/** Nine is where a count stops being a number and becomes "a lot". */
+const MAX_SHOWN = 9;
 
-export function BottomNav({ badges }: Props) {
+export function BottomNav() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const session = useSession();
+  const [counts, setCounts] = useState<{ deals: number; offers: number }>({
+    deals: 0,
+    offers: 0,
+  });
+
+  /**
+   * Recounted after the screens where something could have changed, not on
+   * every navigation.
+   *
+   * Only three places move these numbers: a listing (where an offer is made or
+   * a deal locked), the offers inbox, and a handoff. Counting on every route
+   * change instead meant two queries per tap, so browsing twenty listings cost
+   * forty requests to learn nothing. Leaving one of those three is the cheap
+   * signal that it is worth asking again.
+   *
+   * A failure leaves the previous counts rather than dropping to zero, since a
+   * tab that quietly loses its number reads as "you already dealt with it".
+   */
+  const previous = useRef<string | null>(null);
+
+  useEffect(() => {
+    const cameFrom = previous.current;
+    previous.current = pathname;
+
+    if (!session) {
+      setCounts({ deals: 0, offers: 0 });
+      return;
+    }
+
+    const ACTED_ON = ['/event/', '/deal/', '/offers'];
+    const firstLoad = cameFrom === null;
+    if (!firstLoad && !ACTED_ON.some((prefix) => cameFrom.startsWith(prefix))) return;
+
+    let cancelled = false;
+    pendingCounts()
+      .then((next) => {
+        if (!cancelled) setCounts(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [session, pathname]);
 
   if (HIDDEN_ON.includes(pathname)) return null;
   // undefined means "still checking" -- rendering the anonymous bar first and
@@ -67,7 +109,8 @@ export function BottomNav({ badges }: Props) {
           const active = t.match.some(
             (m) => pathname === m || pathname.startsWith(`${m}/`)
           );
-          const badge = badges?.[t.href] ?? 0;
+          const waiting =
+            t.href === '/deals' ? counts.deals : t.href === '/offers' ? counts.offers : 0;
 
           return (
             <Pressable
@@ -81,15 +124,13 @@ export function BottomNav({ badges }: Props) {
                   variant={active ? 'bodyMedium' : 'body'}
                   tone={active ? 'default' : 'subtle'}
                 >
-                  {t.label}
+                  {/* The count rides in the label rather than a pill: it only
+                      ever means "these are yours to answer", and a bare number
+                      floating beside a word is easy to read as unread mail. */}
+                  {waiting > 0
+                    ? `${t.label} (${waiting > MAX_SHOWN ? `${MAX_SHOWN}+` : waiting})`
+                    : t.label}
                 </Text>
-                {badge > 0 && (
-                  <View style={styles.badge}>
-                    <Text variant="caption" tone="inverse" style={styles.badgeText}>
-                      {badge > 9 ? '9+' : badge}
-                    </Text>
-                  </View>
-                )}
               </View>
               <View style={[styles.marker, active && styles.markerOn]} />
             </Pressable>
@@ -118,16 +159,6 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, alignItems: 'center', gap: space[2], paddingVertical: space[1] },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
-  badge: {
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 5,
-    borderRadius: radius.full,
-    backgroundColor: colors.want,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: { fontSize: 11, lineHeight: 14 },
   marker: { height: 2, width: 20, borderRadius: 1, backgroundColor: colors.transparent },
   markerOn: { backgroundColor: colors.foreground },
 });

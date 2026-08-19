@@ -6,6 +6,7 @@
  * touching UI code.
  */
 import { supabase } from '@/services/supabase';
+import { stepFor, HandoffState, Role } from '@/lib/handoff';
 
 /**
  * An expired or revoked token should log you out, not render "something went
@@ -116,6 +117,19 @@ export interface LockIn {
   locked_price_cents: number;
   state: LockInState;
   locked_at: string;
+  /**
+   * One timestamp per transition rather than a single updated_at. Together
+   * they are the deal's history, and the latest of them is when anything last
+   * actually happened -- which is the order the deals list wants.
+   */
+  paid_at: string | null;
+  confirmed_at: string | null;
+  cancelled_at: string | null;
+}
+
+/** When this deal last moved. Deals are sorted by it, newest first. */
+export function lastActionAt(d: LockIn): string {
+  return d.cancelled_at ?? d.confirmed_at ?? d.paid_at ?? d.locked_at;
 }
 
 /** A listing joined with the profile of whoever posted it. */
@@ -865,6 +879,34 @@ export async function getDeal(id: string): Promise<DealWithContext | null> {
     .maybeSingle();
   if (error) await fail(error);
   return data as unknown as DealWithContext | null;
+}
+
+/**
+ * What is waiting on you, for the nav.
+ *
+ * Deliberately built from the same calls the two screens use rather than a
+ * pair of count queries: the definition of "your turn" lives in one place, so
+ * the number on the tab and the rows behind it cannot drift apart. Both
+ * results are small -- these are your own deals and offers, not a feed.
+ */
+export async function pendingCounts(): Promise<{ deals: number; offers: number }> {
+  const session = await getSession();
+  if (!session) return { deals: 0, offers: 0 };
+  const me = session.user.id;
+
+  const [deals, offers] = await Promise.all([myDeals(), offersOnMyListings()]);
+
+  return {
+    // A deal needs you when it is still live and the next move is yours.
+    // stepFor already encodes that for both sides of the handoff.
+    deals: deals.filter((d) => {
+      if (d.state !== 'pending_payment' && d.state !== 'paid') return false;
+      const role: Role = d.buyer_id === me ? 'buyer' : 'seller';
+      return !stepFor(d.state as HandoffState, role).waiting;
+    }).length,
+    // Same rule the offers screen shows as "On your listings (n)".
+    offers: offers.filter((o) => o.status === 'open').length,
+  };
 }
 
 export async function myDeals(): Promise<DealWithContext[]> {
