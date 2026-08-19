@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, ActivityIndicator, Image } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Text, Card, Badge, Avatar, Button, Separator, ErrorState, EmptyState } from '@/components/ui';
@@ -25,6 +25,50 @@ export default function ListingDetailScreen() {
   const [arming, setArming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ownerError, setOwnerError] = useState<string | null>(null);
+  const soloPhoto =
+    listing.data?.image_urls?.length === 1 ? listing.data.image_urls[0] : null;
+  /** The measured shape of the single photo, tagged with the URL it was
+   *  measured from. Tagged rather than bare, because this screen is reused
+   *  across listings: a bare ratio would size the next listing's photo with
+   *  the previous one's proportions until the new measurement landed. */
+  const [photoShape, setPhotoShape] = useState<{
+    uri: string;
+    ratio: number;
+  } | null>(null);
+
+  // Image.getSize rather than the Image's own onLoad: react-native-web does
+  // not populate nativeEvent.source, so onLoad never fired with usable
+  // dimensions and every photo kept the placeholder shape. getSize works on
+  // both web and native.
+  useEffect(() => {
+    if (!soloPhoto) return;
+    let cancelled = false;
+    Image.getSize(
+      soloPhoto,
+      (w, h) => {
+        if (!cancelled && w && h) setPhotoShape({ uri: soloPhoto, ratio: w / h });
+      },
+      () => {
+        // A URL we cannot measure still renders -- as an empty box, exactly as
+        // it did before -- so there is nothing useful to say to the reader.
+        // Leaving the shape unset keeps the placeholder ratio.
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [soloPhoto]);
+  /** 4:3 until measured. Any fixed number crops or letterboxes something; this
+   *  one is only ever on screen for the moment before the real ratio lands. */
+  const measured = photoShape?.uri === soloPhoto ? photoShape.ratio : 4 / 3;
+  /** Floored at 1:2. Nothing bounds a photo's dimensions -- the storage rules
+   *  cap count, byte size and mime type, so a 1200x6000 screenshot is a legal
+   *  upload -- and at phone width that is 1675px of image sitting on top of
+   *  the seller card and the whole offer board. `contain` means a photo past
+   *  the floor is still shown whole, just fitted inside a 1:2 box rather than
+   *  setting the height of the page. Ordinary phone photos are 3:4 or 9:16 and
+   *  never reach it. */
+  const photoRatio = Math.max(measured, 0.5);
 
   // Returns null unless a lock-in already exists between us, so this doubles
   // as the check for whether the deal is live.
@@ -159,8 +203,8 @@ export default function ListingDetailScreen() {
       {l.image_urls?.length === 1 ? (
         <Image
           source={{ uri: l.image_urls[0] }}
-          style={styles.photoSingle}
-          resizeMode="cover"
+          style={[styles.photoSingle, { aspectRatio: photoRatio }]}
+          resizeMode="contain"
           accessibilityLabel="Listing photo"
         />
       ) : !!l.image_urls?.length ? (
@@ -379,9 +423,11 @@ const styles = StyleSheet.create({
   galleryInner: { gap: space[3] },
   photo: { width: 220, height: 150, borderRadius: radius.lg, backgroundColor: colors.muted },
   // Full width, and outside the horizontal scroller -- see the render.
+  // No fixed height: the height comes from an aspectRatio set once the image
+  // reports its own dimensions, so a tall photo is shown whole rather than
+  // cropped to a 200px band.
   photoSingle: {
     width: '100%',
-    height: 200,
     marginTop: space[5],
     borderRadius: radius.lg,
     backgroundColor: colors.muted,
