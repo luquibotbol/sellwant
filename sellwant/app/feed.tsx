@@ -18,6 +18,7 @@ import {
   Avatar,
   Card,
   Badge,
+  Button,
   Input,
   Skeleton,
   EmptyState,
@@ -93,9 +94,8 @@ export default function FeedScreen() {
   );
 
   const loadMore = async () => {
-    // A short first page means there is no second one; asking again on every
-    // bounce of a scroll would be a request per frame.
     if (loadingMore || exhausted || listings.loading) return;
+    // A short first page means there is no second one.
     if ((listings.data?.length ?? 0) < FEED_PAGE_SIZE) return setExhausted(true);
 
     setLoadingMore(true);
@@ -241,13 +241,20 @@ export default function FeedScreen() {
         ) : (
           <FlatList
             data={rows}
-            onEndReached={loadMore}
-            // Half a screen early, so the next page is usually already there.
-            onEndReachedThreshold={0.5}
+            // Asked for, not inferred. onEndReached fires the moment the list
+            // is shorter than the screen, so a first page that did not fill it
+            // immediately fetched a second -- which is the opposite of not
+            // loading everything up front.
             ListFooterComponent={
-              loadingMore ? (
-                <ActivityIndicator color={colors.mutedForeground} style={styles.footer} />
-              ) : null
+              exhausted || rows.length === 0 ? null : (
+                <Button
+                  title={loadingMore ? 'Loading…' : 'Show more'}
+                  variant="outline"
+                  loading={loadingMore}
+                  onPress={loadMore}
+                  style={styles.footer}
+                />
+              )
             }
             keyExtractor={(l) => l.id}
             contentContainerStyle={styles.list}
@@ -416,7 +423,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   tabActive: { backgroundColor: colors.muted },
-  footer: { paddingVertical: space[6] },
+  footer: { marginTop: space[5], marginBottom: space[6] },
   list: { paddingHorizontal: space[5], paddingBottom: space[16], gap: space[3] },
   card: { marginBottom: space[3] },
   cardSkeleton: { height: 116, borderRadius: radius.xl, marginBottom: space[3] },

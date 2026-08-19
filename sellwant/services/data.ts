@@ -444,8 +444,14 @@ function escapeForOr(term: string) {
  * already-fetched page, so it keeps working once there are more listings than
  * fit in one request.
  */
-/** Rows per feed request. Enough to fill a tall screen and scroll a little. */
-export const FEED_PAGE_SIZE = 30;
+/**
+ * Rows per feed request.
+ *
+ * Twenty, and no further without being asked. Nobody scrolls a marketplace
+ * looking for one ticket -- they search -- so loading ahead spends the
+ * database on rows almost nobody reads.
+ */
+export const FEED_PAGE_SIZE = 20;
 
 export async function listActive(
   opts: {
