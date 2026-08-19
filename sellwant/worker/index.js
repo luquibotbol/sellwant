@@ -19,6 +19,7 @@
 /** URL prefix -> the file Expo actually emitted for it. */
 const DYNAMIC = {
   deal: '/deal/[id].html',
+  edit: '/edit/[id].html',
   event: '/event/[id].html',
   u: '/u/[id].html',
 };
