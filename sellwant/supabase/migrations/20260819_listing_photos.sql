@@ -54,17 +54,28 @@ using (
 -- as in the picker: the picker is a convenience, this is the rule. Each entry
 -- must live in our own bucket -- otherwise image_urls is an arbitrary-URL field
 -- that renders wherever a listing renders, which is a tracking pixel at best.
+--
+-- The predicate lives in a function because a CHECK constraint may not contain
+-- a subquery, and checking every element of an array needs one. Wrapping it in
+-- an IMMUTABLE function is the supported way round that. The first version of
+-- this file inlined the subquery, which Postgres rejects with "cannot use
+-- subquery in check constraint" -- and since the editor runs the file in a
+-- single transaction, that error rolled back the bucket and the policies above
+-- as well, leaving no trace that anything had been attempted.
+create or replace function public.listing_image_urls_ok(urls text[])
+returns boolean
+language sql immutable as $$
+  select urls is null
+      or (
+        coalesce(array_length(urls, 1), 0) <= 3
+        and not exists (
+          select 1 from unnest(urls) as u
+          where u !~ '^https://[a-z0-9]+\.supabase\.co/storage/v1/object/public/listing-photos/'
+        )
+      );
+$$;
+
 alter table public.listings drop constraint if exists listings_image_urls_bounded;
-alter table public.listings add constraint listings_image_urls_bounded check (
-  image_urls is null
-  or (
-    array_length(image_urls, 1) is null
-    or (
-      array_length(image_urls, 1) <= 3
-      and not exists (
-        select 1 from unnest(image_urls) as u
-        where u !~ '^https://[a-z0-9]+\.supabase\.co/storage/v1/object/public/listing-photos/'
-      )
-    )
-  )
-);
+alter table public.listings
+  add constraint listings_image_urls_bounded
+  check (public.listing_image_urls_ok(image_urls));
