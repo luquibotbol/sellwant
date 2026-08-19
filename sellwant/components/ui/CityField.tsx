@@ -98,7 +98,7 @@ export function CityField({ label = 'City', value, onChange, legacyValue, error 
 
       {!value && !legacyValue && !focused && (
         <Text variant="caption" tone="subtle" style={styles.legacy}>
-          {CITIES.length} cities so far — ask us if yours is missing.
+          Start typing — {CITIES.length.toLocaleString()} US cities.
         </Text>
       )}
     </View>
