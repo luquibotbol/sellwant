@@ -559,12 +559,70 @@ export async function registerTicketCode(
   return result.ok ? { ok: true } : { ok: false, sameSeller: !!result.same_seller };
 }
 
-export async function cancelListing(id: string) {
-  const { error } = await supabase
+/**
+ * Edit a listing you posted.
+ *
+ * Only the fields below can move, and only while the listing is still active.
+ * That is enforced by a column-level grant and an RLS policy, not by this
+ * signature -- `status`, `type` and the trigger-maintained offer stats are
+ * unwritable by any client, so a seller cannot fake demand on their own
+ * listing or reopen one that is mid-handoff.
+ */
+export async function updateListing(
+  id: string,
+  patch: {
+    title?: string;
+    description?: string | null;
+    price_cents?: number;
+    location?: string | null;
+    event_date?: string | null;
+    category_id?: number | null;
+  }
+): Promise<Listing> {
+  const { data, error } = await supabase
     .from('listings')
-    .update({ status: 'cancelled' })
+    .update(patch)
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) await fail(error);
+  return data as Listing;
+}
+
+/**
+ * Take a listing off the market.
+ *
+ * Goes through an RPC because clients can no longer write `status` directly.
+ * The function refuses anything that is not active: a locked listing is
+ * mid-handoff, and pulling it out from under the other person is the deal
+ * screen's job, not this one's.
+ */
+export async function cancelListing(id: string) {
+  const { error } = await supabase.rpc('cancel_listing', { p_id: id });
+  if (error) await fail(error);
+}
+
+/**
+ * Delete a listing outright.
+ *
+ * Only possible while nobody has committed to it -- the policy checks for
+ * lock-ins, because deleting cascades to offers and deals and would erase the
+ * other person's record of a trade along with your own. Once there is a deal,
+ * cancelling is the only exit, and it keeps the history.
+ */
+export async function deleteListing(id: string) {
+  const { error, count } = await supabase
+    .from('listings')
+    .delete({ count: 'exact' })
     .eq('id', id);
   if (error) await fail(error);
+  // RLS filters rather than throwing, so a blocked delete looks like success
+  // with nothing removed. Say what actually happened.
+  if (count === 0) {
+    throw new Error(
+      'This listing has a deal attached, so it can only be taken down, not deleted.'
+    );
+  }
 }
 
 // ---------------------------------------------------------------- lock-ins

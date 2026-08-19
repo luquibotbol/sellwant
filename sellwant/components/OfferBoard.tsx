@@ -222,6 +222,16 @@ export function OfferBoard({ listing, meId, onSettled }: Props) {
             style={styles.signInAction}
           />
         </Card>
+      ) : isOwner && !replyTo ? (
+        /* The poster gets no opening offer of their own. Countering somebody
+           is answering a real bid and stays available on each row; posting a
+           bare offer here would be bidding on your own listing, which shows up
+           under "most anyone will pay" as demand that never existed. */
+        <Card style={styles.form}>
+          <Text variant="small" tone="muted">
+            This is your listing. Reply to an offer to counter it.
+          </Text>
+        </Card>
       ) : listing.status !== 'active' ? (
         <Card style={styles.form}>
           <Text variant="small" tone="muted">

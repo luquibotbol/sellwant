@@ -111,6 +111,7 @@ export default function RootLayout() {
         <Stack.Screen name="profile" options={{ title: 'Profile', headerBackTitle: 'Back' }} />
         <Stack.Screen name="create-event" options={{ title: 'New listing', headerBackTitle: 'Back' }} />
         <Stack.Screen name="event/[id]" options={{ title: 'Listing', headerBackTitle: 'Back' }} />
+        <Stack.Screen name="edit/[id]" options={{ title: 'Edit listing', headerBackTitle: 'Back' }} />
         </Stack>
           <BottomNav />
         </View>

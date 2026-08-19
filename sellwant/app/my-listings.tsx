@@ -17,6 +17,7 @@ import { useSession } from '@/hooks/useSession';
 import {
   myListings,
   cancelListing,
+  deleteListing,
   ListingWithPoster,
   ListingStatus,
   ListingType,
@@ -37,6 +38,7 @@ export default function MyListingsScreen() {
   const [which, setWhich] = useState<Which>('all');
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (session === undefined) {
@@ -61,9 +63,29 @@ export default function MyListingsScreen() {
   const rank = (s: ListingStatus) => (s === 'active' ? 0 : s === 'locked' ? 1 : 2);
   const sorted = [...filtered].sort((a, b) => rank(a.status) - rank(b.status));
 
+  const remove = async (id: string) => {
+    if (removing !== id) {
+      setRemoving(id);
+      setConfirming(null);
+      return;
+    }
+    setBusy(id);
+    setError(null);
+    try {
+      await deleteListing(id);
+      listings.reload();
+    } catch (e: any) {
+      setError(e?.message ?? 'Could not delete that');
+    } finally {
+      setBusy(null);
+      setRemoving(null);
+    }
+  };
+
   const takeDown = async (id: string) => {
     if (confirming !== id) {
       setConfirming(id);
+      setRemoving(null);
       return;
     }
     setBusy(id);
@@ -155,14 +177,41 @@ export default function MyListingsScreen() {
                   )}
 
                   {live && (
-                    <Button
-                      title={confirming === l.id ? 'Tap again to take it down' : 'Take down'}
-                      variant="outline"
-                      size="sm"
-                      loading={busy === l.id}
-                      onPress={() => takeDown(l.id)}
-                      style={styles.action}
-                    />
+                    <View style={styles.actions}>
+                      <Button
+                        title="Edit"
+                        variant="secondary"
+                        size="sm"
+                        onPress={() => router.push(`/edit/${l.id}` as never)}
+                      />
+                      <Button
+                        title={confirming === l.id ? 'Tap again to take it down' : 'Take down'}
+                        variant="outline"
+                        size="sm"
+                        loading={busy === l.id}
+                        onPress={() => takeDown(l.id)}
+                      />
+                      {/* Delete only exists where it can actually work: once
+                          anyone has committed, removing the row would erase
+                          their side of the deal too, so the database refuses
+                          and taking it down is the only exit. */}
+                      {l.offer_count === 0 && (
+                        <Button
+                          title={removing === l.id ? 'Tap again to delete' : 'Delete'}
+                          variant="ghost"
+                          size="sm"
+                          loading={busy === l.id}
+                          onPress={() => remove(l.id)}
+                        />
+                      )}
+                    </View>
+                  )}
+
+                  {removing === l.id && (
+                    <Text variant="caption" tone="destructive" style={styles.note}>
+                      Deleting removes it completely. Taking it down keeps it in your
+                      history instead.
+                    </Text>
                   )}
 
                   {/* Taking a sell listing down frees its registered QR, so the
@@ -200,6 +249,7 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { marginTop: space[3] },
   offers: { marginTop: space[2] },
+  actions: { flexDirection: 'row', gap: space[2], marginTop: space[4], flexWrap: 'wrap' },
   action: { marginTop: space[4], alignSelf: 'flex-start' },
   note: { marginTop: space[2] },
 });
