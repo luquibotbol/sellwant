@@ -38,3 +38,13 @@ yarn-error.*
 
 # wrangler dev local state (miniflare caches, temp bundles)
 .wrangler/
+
+# Conflict copies. Something syncing this folder (iCloud Drive syncs
+# ~/Documents by default) writes "cities 2.ts" beside "cities.ts" whenever it
+# sees two versions of a file. Seven of them were committed before anyone
+# noticed, including a stale CitySelect and a second copy of a migration.
+# Ignoring them stops the next batch reaching a commit; it does not stop them
+# appearing, which is a setting on the syncing app.
+* [0-9].*
+*conflicted copy*
+* copy.*
