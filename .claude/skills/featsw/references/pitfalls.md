@@ -94,6 +94,11 @@ and told crawlers one listing was an unbounded number of near-duplicate pages.
 rendering correctly against a broken URL is indistinguishable from one that
 never rendered. Measure the element box before doubting the code.
 
+**A percentage width inside a horizontal `ScrollView` collapses to zero.** The
+content box is sized by its content, so `width: '100%'` has nothing to resolve
+against. A listing's single photo loaded, decoded, and drew a 0x200 box.
+Anything full-width belongs outside the scroller.
+
 **Deferred handlers capture stale values.** `CityField` deferred blur by 150ms
 so a tap on an option could land first — which meant the timer held the value
 from *before* the selection and wiped it. Selecting a city cleared the field.
