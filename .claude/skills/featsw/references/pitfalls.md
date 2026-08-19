@@ -82,6 +82,11 @@ and told crawlers one listing was an unbounded number of near-duplicate pages.
 
 ## React
 
+**React Native Web's `Image` renders an empty box on a failed load.** No
+`<img>`, no `background-image`, nothing in the HTML — so a component that is
+rendering correctly against a broken URL is indistinguishable from one that
+never rendered. Measure the element box before doubting the code.
+
 **Deferred handlers capture stale values.** `CityField` deferred blur by 150ms
 so a tap on an option could land first — which meant the timer held the value
 from *before* the selection and wiped it. Selecting a city cleared the field.
@@ -91,6 +96,14 @@ the timer when the change makes it unnecessary.
 **A `catch` that disables the UI is worse than the error.** Setting
 `exhausted` on a failed page removed the "Show more" button permanently, so
 one dropped request made the rest of the feed unreachable.
+
+**An effect in a component rendered on every screen runs on every
+navigation.** The nav's badge count keyed on `pathname` cost two queries per
+tap. Key on the screens that can actually change the value.
+
+**Nothing a draft form does should be irreversible before the draft is saved.**
+The photo picker deleted files from storage on removal, so abandoning an edit
+left the listing pointing at a file that no longer existed.
 
 **Confirm-on-second-tap needs the other confirmations disarmed**, or two armed
 destructive buttons sit side by side.

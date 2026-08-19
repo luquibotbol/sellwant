@@ -79,3 +79,67 @@ fixture without a deal. Self-review caught it before merge.
 
 **Signal:** when a change depends on a migration that a human has to apply,
 work out what happens in the window before they do.
+
+---
+
+### 2026-08-19 — "The gallery isn't rendering" and "the image 404s" look identical
+
+A new photo gallery appeared to render nothing: no `<img>` in the DOM, no
+element with a `background-image`, the URL absent from the HTML entirely. The
+component was fine. React Native Web's `Image` renders an empty box when the
+source fails to load, and the source was failing because the storage bucket
+does not exist until the migration is applied by hand.
+
+**Signal:** when a component "doesn't render", measure the box before reading
+the code — four elements at exactly the styled dimensions were sitting there
+the whole time. A one-line debug probe settled in seconds what twenty minutes
+of staring did not.
+
+---
+
+### 2026-08-19 — Three of three asks were partly already built
+
+`image_urls` already existed on listings and was already writable. `BottomNav`
+already had badge rendering nothing passed a value to. The offers screen
+already computed the exact count the nav needed, in the exact `(n)` format
+that was asked for.
+
+**Signal:** grep for the field and the component before designing either. In
+all three cases the useful work was smaller than the ask and sat somewhere
+slightly different from where it looked.
+
+---
+
+### 2026-08-19 — A column can be writable long before anything writes to it
+
+`listings.image_urls` had been client-writable with no cap and no validation
+since it was created: any signed-in user could put a hundred entries in it
+pointing anywhere on the internet, to be rendered wherever a listing renders.
+Nothing wrote to it, so nothing had ever exercised it.
+
+**Signal:** an unused column is not an unreachable one. When a feature finally
+starts writing to a field, that is the moment to bound what anyone else can
+write to it.
+
+---
+
+### 2026-08-19 — Deleting a file on removal breaks the listing that still points at it
+
+The photo picker deleted from storage the moment you removed a photo. Remove
+one while editing, leave without saving, and `image_urls` still references a
+file that no longer exists -- an empty frame with no way to repair it. Caught
+in self-review, not by any test.
+
+**Signal:** when a form edits a draft, nothing it does should be irreversible
+before the draft is saved. An orphaned file is cheaper than a broken record.
+
+---
+
+### 2026-08-19 — An effect in the nav costs a query on every screen
+
+Recounting the tab badges keyed on `pathname` meant two queries per tap, so
+browsing twenty listings cost forty requests to learn nothing had changed.
+
+**Signal:** anything living in a component rendered on every screen pays its
+cost on every navigation. Ask which screens can actually change the value, and
+key on leaving those.
