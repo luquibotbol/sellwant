@@ -143,3 +143,33 @@ browsing twenty listings cost forty requests to learn nothing had changed.
 **Signal:** anything living in a component rendered on every screen pays its
 cost on every navigation. Ask which screens can actually change the value, and
 key on leaving those.
+
+---
+
+### 2026-08-19 — The fix for the cropped photo looked identical to no fix at all
+
+A listing's single photo was cropped to a fixed 200px band. Sizing the box
+from the image's own `onLoad` typechecked, ran, and rendered a page that
+looked reasonable — but react-native-web does not populate
+`nativeEvent.source`, so the ratio stayed null and every photo kept the
+placeholder shape. The screenshot afterwards looks like a working fix; it is
+only wrong if you know what the photo's real proportions are.
+
+**Signal:** for a layout fix, assert the number rather than looking at it.
+Comparing the computed `aspect-ratio` (`1.33333 / 1`) against the image's
+natural size (555×900) settled it instantly, and would have caught it before
+the first screenshot rather than after.
+
+---
+
+### 2026-08-19 — Bounding the bytes is not bounding the layout
+
+The storage rules for listing photos cap count, file size and mime type, so
+they read as though the field is fully constrained. Nothing caps *dimensions*:
+a 1200×6000 screenshot is a legal 5MB upload, and once the box takes the
+image's own ratio that is 1675px of photo at phone width, burying the seller
+card and the whole offer board.
+
+**Signal:** when a change makes layout depend on user data that was previously
+ignored, ask what the most extreme legal value does to the page. The upload
+limits had been reviewed; they just answered a different question.

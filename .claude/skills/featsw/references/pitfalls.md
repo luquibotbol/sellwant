@@ -94,6 +94,13 @@ and told crawlers one listing was an unbounded number of near-duplicate pages.
 rendering correctly against a broken URL is indistinguishable from one that
 never rendered. Measure the element box before doubting the code.
 
+**React Native Web's `Image` does not populate `onLoad`'s
+`nativeEvent.source`.** Sizing a box from the dimensions it reports leaves the
+value null forever, and the fallback renders something plausible — so the
+broken version and the working one look the same on screen. Use
+`Image.getSize`, and assert the computed ratio against the image's natural
+size rather than eyeballing the result.
+
 **A percentage width inside a horizontal `ScrollView` collapses to zero.** The
 content box is sized by its content, so `width: '100%'` has nothing to resolve
 against. A listing's single photo loaded, decoded, and drew a 0x200 box.
