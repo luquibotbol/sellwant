@@ -116,6 +116,19 @@ export interface LockIn {
   locked_price_cents: number;
   state: LockInState;
   locked_at: string;
+  /**
+   * One timestamp per transition rather than a single updated_at. Together
+   * they are the deal's history, and the latest of them is when anything last
+   * actually happened -- which is the order the deals list wants.
+   */
+  paid_at: string | null;
+  confirmed_at: string | null;
+  cancelled_at: string | null;
+}
+
+/** When this deal last moved. Deals are sorted by it, newest first. */
+export function lastActionAt(d: LockIn): string {
+  return d.cancelled_at ?? d.confirmed_at ?? d.paid_at ?? d.locked_at;
 }
 
 /** A listing joined with the profile of whoever posted it. */
