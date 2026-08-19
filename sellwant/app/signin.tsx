@@ -348,7 +348,7 @@ export default function SignInScreen() {
                 <Text
                   variant="caption"
                   tone="muted"
-                  onPress={() => router.push('/terms' as never)}
+                  onPress={() => router.navigate('/terms' as never)}
                 >
                   Terms
                 </Text>{' '}
@@ -356,7 +356,7 @@ export default function SignInScreen() {
                 <Text
                   variant="caption"
                   tone="muted"
-                  onPress={() => router.push('/privacy' as never)}
+                  onPress={() => router.navigate('/privacy' as never)}
                 >
                   Privacy Policy
                 </Text>

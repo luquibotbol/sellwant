@@ -145,7 +145,7 @@ export default function OffersScreen() {
                   : 'Find a ticket and name your price — offers are public, so everyone can see the going rate.'
               }
               actionLabel="Browse listings"
-              onAction={() => router.push('/feed')}
+              onAction={() => router.navigate('/feed')}
             />
           )
         ) : (
@@ -167,7 +167,7 @@ export default function OffersScreen() {
                   accent={buying ? 'want' : 'sell'}
                   style={styles.card}
                   onPress={
-                    o.listing ? () => router.push(`/event/${o.listing!.id}` as never) : undefined
+                    o.listing ? () => router.navigate(`/event/${o.listing!.id}` as never) : undefined
                   }
                 >
                   <View style={styles.cardTop}>
@@ -234,7 +234,7 @@ export default function OffersScreen() {
                                 // straight to the handoff, which is the whole
                                 // point of accepting.
                                 const dealId = await acceptOffer(o.id);
-                                router.push(`/deal/${dealId}` as never);
+                                router.navigate(`/deal/${dealId}` as never);
                               })
                             }
                           />
@@ -249,7 +249,7 @@ export default function OffersScreen() {
                             variant="ghost"
                             size="sm"
                             onPress={() =>
-                              o.listing && router.push(`/event/${o.listing.id}` as never)
+                              o.listing && router.navigate(`/event/${o.listing.id}` as never)
                             }
                           />
                         </>

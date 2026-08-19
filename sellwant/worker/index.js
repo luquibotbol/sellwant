@@ -573,14 +573,22 @@ export default {
         // allowlist silently fails for exactly the unlisted agents this is
         // meant to be legible to. The edge cache buys the latency back without
         // telling anyone a different story.
-        const key = new Request(url.toString(), { method: 'GET' });
+        // Path only, deliberately. expo-router appends __EXPO_ROUTER_key to
+        // in-app navigations, so the URL people copy out of the address bar
+        // and paste to a friend carries a value unique to their session.
+        // Keyed on the full URL, every share missed the cache and re-read the
+        // database for a page identical to the cached one; used as og:url and
+        // canonical, it told crawlers that one listing was an unbounded number
+        // of near-duplicate pages.
+        const shareUrl = `${url.origin}${url.pathname}`;
+        const key = new Request(shareUrl, { method: 'GET' });
         const cached = await caches.default.match(key);
         if (cached) return cached;
 
         const listing = await fetchListing(env, tail);
         if (!listing) return page;
 
-        const enriched = withListingData(page, listing, url.toString());
+        const enriched = withListingData(page, listing, shareUrl);
         const out = new Response(enriched.body, { status: 200, headers: enriched.headers });
         // Short, because prices move and a settled listing must stop being
         // advertised as available. s-maxage keeps it at the edge without

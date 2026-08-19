@@ -8,12 +8,13 @@ import {
   Button,
   Input,
   DateField,
-  LocationField,
+  CityField,
   EmptyState,
   ErrorState,
 } from '@/components/ui';
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { money } from '@/lib/format';
+import { City, toCity } from '@/lib/cities';
 import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
 import { getListing, updateListing, listLocationSuggestions } from '@/services/data';
@@ -34,11 +35,13 @@ export default function EditListingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const session = useSession();
   const listing = useAsync(() => getListing(id), [id]);
-  const places = useAsync(listLocationSuggestions, []);
 
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
-  const [location, setLocation] = useState('');
+  const [city, setCity] = useState<City | null>(null);
+  // What the listing held before cities existed, so the field can say what is
+  // about to be replaced instead of silently dropping it.
+  const [originalLocation, setOriginalLocation] = useState<string | null>(null);
   const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
   const [ready, setReady] = useState(false);
@@ -52,7 +55,8 @@ export default function EditListingScreen() {
     if (!l || ready) return;
     setTitle(l.title);
     setPrice(String(l.price_cents / 100));
-    setLocation(l.location ?? '');
+    setCity(toCity(l.location));
+    setOriginalLocation(l.location);
     setDate(l.event_date ?? '');
     setDescription(l.description ?? '');
     setReady(true);
@@ -121,7 +125,7 @@ export default function EditListingScreen() {
       await updateListing(l.id, {
         title: title.trim(),
         price_cents: cents,
-        location: location.trim() || null,
+        location: city,
         event_date: date || null,
         description: description.trim() || null,
       });
@@ -169,10 +173,10 @@ export default function EditListingScreen() {
         containerStyle={styles.field}
       />
       <View style={styles.field}>
-        <LocationField
-          value={location}
-          onChange={setLocation}
-          suggestions={places.data ?? []}
+        <CityField
+          value={city}
+          onChange={setCity}
+          legacyValue={originalLocation}
         />
       </View>
       <View style={styles.field}>

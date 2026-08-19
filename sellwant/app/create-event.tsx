@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { router } from 'expo-router';
-import { Text, Card, Button, Input, DateField, LocationField } from '@/components/ui';
+import { Text, Card, Button, Input, DateField, CityField } from '@/components/ui';
+import { City } from '@/lib/cities';
 import TicketCodeField from '@/components/TicketCodeField';
 import { colors, space, radius, control, maxContentWidth } from '@/constants/theme';
 import { todayISO } from '@/lib/format';
@@ -23,7 +24,7 @@ export default function CreateListingScreen() {
   const [type, setType] = useState<ListingType>('sell');
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
-  const [location, setLocation] = useState('');
+  const [city, setCity] = useState<City | null>(null);
   // Most listings are for tonight or this weekend, so today is the right
   // default -- an empty date field made the common case extra work.
   const [date, setDate] = useState(todayISO());
@@ -66,7 +67,7 @@ export default function CreateListingScreen() {
         title: title.trim(),
         price_cents: Math.round(parseFloat(price) * 100),
         description: description.trim() || undefined,
-        location: location.trim() || undefined,
+        location: city ?? undefined,
         event_date: date.trim() || undefined,
         category_id: categoryId ?? undefined,
       });
@@ -180,11 +181,7 @@ export default function CreateListingScreen() {
           })}
         </View>
 
-        <LocationField
-          value={location}
-          onChange={setLocation}
-          suggestions={places.data ?? []}
-        />
+        <CityField value={city} onChange={setCity} error={errors.city} />
 
         <DateField
           label="When"

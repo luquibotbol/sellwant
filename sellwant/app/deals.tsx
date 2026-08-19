@@ -52,7 +52,7 @@ export default function DealsScreen() {
             title="No deals yet"
             body="When you agree a price with someone, the handoff shows up here."
             actionLabel="Browse listings"
-            onAction={() => router.push('/feed')}
+            onAction={() => router.navigate('/feed')}
           />
         ) : (
           <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
@@ -68,7 +68,7 @@ export default function DealsScreen() {
                   key={d.id}
                   accent={role === 'buyer' ? 'want' : 'sell'}
                   style={styles.card}
-                  onPress={() => router.push(`/deal/${d.id}` as never)}
+                  onPress={() => router.navigate(`/deal/${d.id}` as never)}
                 >
                   <View style={styles.top}>
                     <Badge label={badge.label} variant={badge.variant} />

@@ -444,17 +444,46 @@ function escapeForOr(term: string) {
  * already-fetched page, so it keeps working once there are more listings than
  * fit in one request.
  */
+/**
+ * Rows per feed request.
+ *
+ * Twenty, and no further without being asked. Nobody scrolls a marketplace
+ * looking for one ticket -- they search -- so loading ahead spends the
+ * database on rows almost nobody reads.
+ */
+export const FEED_PAGE_SIZE = 20;
+
 export async function listActive(
-  opts: { type?: ListingType; q?: string; categoryId?: number } = {}
+  opts: {
+    type?: ListingType;
+    q?: string;
+    categoryId?: number;
+    city?: string;
+    /** Rows already shown; the next page starts here. */
+    offset?: number;
+    limit?: number;
+  } = {}
 ): Promise<ListingWithPoster[]> {
   let query = supabase
     .from('listings')
     .select(LISTING_SELECT)
     .eq('status', 'active')
-    .order('event_date', { ascending: true, nullsFirst: false });
+    .order('event_date', { ascending: true, nullsFirst: false })
+    // A tiebreaker, and paging is why it matters. Dozens of listings share an
+    // event date and many have none at all, and Postgres is free to return
+    // tied rows in a different order each time. With offset paging that means
+    // a row can sit at position 19 in one request and 20 in the next: it comes
+    // back twice, which the feed de-duplicates, while whatever it displaced is
+    // never returned at all. Silently missing a listing is the worst failure
+    // this screen has.
+    .order('id', { ascending: true });
 
   if (opts.type) query = query.eq('type', opts.type);
   if (opts.categoryId) query = query.eq('category_id', opts.categoryId);
+  // Exact match, not ilike: the column holds a value picked from a fixed list,
+  // so a fuzzy match here would only ever pull in the pre-cities venue strings
+  // this filter is meant to leave out.
+  if (opts.city) query = query.eq('location', opts.city);
 
   const term = escapeForOr(opts.q ?? '');
   if (term) {
@@ -462,6 +491,14 @@ export async function listActive(
       `title.ilike.%${term}%,location.ilike.%${term}%,description.ilike.%${term}%`
     );
   }
+
+  // Bounded on purpose. Unpaged, this asked for every active listing on every
+  // keystroke, and PostgREST caps the response at its max-rows anyway -- so
+  // past that ceiling listings simply stopped existing, with nothing in the
+  // response to say rows had been dropped.
+  const offset = opts.offset ?? 0;
+  const limit = opts.limit ?? FEED_PAGE_SIZE;
+  query = query.range(offset, offset + limit - 1);
 
   const { data, error } = await query;
   if (error) await fail(error);

@@ -246,7 +246,7 @@ export default function ProfileScreen() {
         variant="secondary"
         block
         style={styles.signOut}
-        onPress={() => router.push('/my-listings')}
+        onPress={() => router.navigate('/my-listings')}
       />
 
       <Button

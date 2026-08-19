@@ -115,7 +115,7 @@ export default function ListingDetailScreen() {
       const created = await createLockIn(l);
       // Straight to the handoff -- the deal screen is where everything the
       // buyer needs now lives.
-      router.push(`/deal/${created.id}` as never);
+      router.navigate(`/deal/${created.id}` as never);
     } catch (e: any) {
       setLockError(e?.message ?? 'Could not lock this in');
     } finally {
@@ -155,7 +155,7 @@ export default function ListingDetailScreen() {
       </Card>
 
       {anon && (
-        <Card style={styles.poster} onPress={() => router.push(signInHere as never)}>
+        <Card style={styles.poster} onPress={() => router.navigate(signInHere as never)}>
           <Text variant="bodyMedium">Sign in to see who&apos;s selling</Text>
           <Text variant="small" tone="muted" style={styles.posterMeta}>
             Names, Instagram handles and completed-handoff counts are only
@@ -165,7 +165,7 @@ export default function ListingDetailScreen() {
       )}
 
       {l.poster && (
-        <Card style={styles.poster} onPress={() => router.push(`/u/${l.user_id}` as never)}>
+        <Card style={styles.poster} onPress={() => router.navigate(`/u/${l.user_id}` as never)}>
           <View style={styles.posterHead}>
             <View style={styles.posterWho}>
               <Avatar uri={l.poster.profile_picture} name={l.poster.full_name} size={36} />
@@ -242,7 +242,7 @@ export default function ListingDetailScreen() {
                 <Button
                   title="Edit"
                   variant="secondary"
-                  onPress={() => router.push(`/edit/${l.id}` as never)}
+                  onPress={() => router.navigate(`/edit/${l.id}` as never)}
                   style={styles.ownerButton}
                 />
                 <Button
@@ -300,7 +300,7 @@ export default function ListingDetailScreen() {
                   ? `Buy now at ${money(l.price_cents)}`
                   : 'I have one — respond'
             }
-            onPress={() => (anon ? router.push(signInHere as never) : lockIn())}
+            onPress={() => (anon ? router.navigate(signInHere as never) : lockIn())}
             loading={locking}
             block
           />
