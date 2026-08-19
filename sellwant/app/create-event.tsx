@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Text, Card, Button, Input, DateField, CityField } from '@/components/ui';
 import { City } from '@/lib/cities';
 import TicketCodeField from '@/components/TicketCodeField';
+import PhotoField from '@/components/PhotoField';
 import { colors, space, radius, control, maxContentWidth } from '@/constants/theme';
 import { todayISO } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
@@ -25,6 +26,7 @@ export default function CreateListingScreen() {
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
   const [city, setCity] = useState<City | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
   // Most listings are for tonight or this weekend, so today is the right
   // default -- an empty date field made the common case extra work.
   const [date, setDate] = useState(todayISO());
@@ -68,6 +70,7 @@ export default function CreateListingScreen() {
         price_cents: Math.round(parseFloat(price) * 100),
         description: description.trim() || undefined,
         location: city ?? undefined,
+        image_urls: photos.length ? photos : undefined,
         event_date: date.trim() || undefined,
         category_id: categoryId ?? undefined,
       });
@@ -182,6 +185,8 @@ export default function CreateListingScreen() {
         </View>
 
         <CityField value={city} onChange={setCity} error={errors.city} />
+
+        <PhotoField value={photos} onChange={setPhotos} />
 
         <DateField
           label="When"

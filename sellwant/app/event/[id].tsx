@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, ActivityIndicator, Image } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Text, Card, Badge, Avatar, Button, Separator, ErrorState, EmptyState } from '@/components/ui';
 import OfferBoard from '@/components/OfferBoard';
-import { colors, space, maxContentWidth } from '@/constants/theme';
+import { colors, space, radius, maxContentWidth } from '@/constants/theme';
 import { money } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
 import {
@@ -144,6 +144,28 @@ export default function ListingDetailScreen() {
           </>
         )}
       </Card>
+
+      {/* Photos, when there are any. Above the poster card because a picture
+          of the venue answers "is this the thing I want" before "who is
+          selling it" -- and below the price, which is what people came for. */}
+      {!!l.image_urls?.length && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.gallery}
+          contentContainerStyle={styles.galleryInner}
+        >
+          {l.image_urls.map((url) => (
+            <Image
+              key={url}
+              source={{ uri: url }}
+              style={[styles.photo, l.image_urls.length === 1 && styles.photoSingle]}
+              resizeMode="cover"
+              accessibilityLabel="Listing photo"
+            />
+          ))}
+        </ScrollView>
+      )}
 
       {anon && (
         <Card style={styles.poster} onPress={() => router.navigate(signInHere as never)}>
@@ -338,6 +360,11 @@ const styles = StyleSheet.create({
   action: { marginTop: space[6] },
   actionNote: { marginTop: space[3], textAlign: 'center' },
   mine: { marginTop: space[6], textAlign: 'center' },
+  gallery: { marginTop: space[5], flexGrow: 0 },
+  galleryInner: { gap: space[3] },
+  photo: { width: 220, height: 150, borderRadius: radius.lg, backgroundColor: colors.muted },
+  // One photo has no row to scroll, so let it use the width it has.
+  photoSingle: { width: '100%', height: 200 },
   ownerRow: { flexDirection: 'row', gap: space[3] },
   ownerButton: { flex: 1 },
   ownerDelete: { marginTop: space[3], alignSelf: 'center' },

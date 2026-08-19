@@ -614,6 +614,7 @@ export async function updateListing(
     location?: string | null;
     event_date?: string | null;
     category_id?: number | null;
+    image_urls?: string[];
   }
 ): Promise<Listing> {
   const { data, error } = await supabase
