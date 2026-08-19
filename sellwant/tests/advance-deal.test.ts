@@ -156,7 +156,17 @@ afterAll(async () => {
       headers: hdrs(sellerTok),
       body: JSON.stringify({ p_id: id }),
     });
-    if (!r.ok) leaked += 1;
+    if (r.ok) continue;
+
+    // The function only exists once the migration has been applied by hand,
+    // and until then this must not be worse than what it replaced: a plain
+    // DELETE still removes every listing without a lock_in, which is all of
+    // the offer-stats fixtures. Dropping straight to `leaked` here would leak
+    // those too, for no reason.
+    const fallback = await rest(sellerTok, `listings?id=eq.${id}`, { method: 'DELETE' });
+    // RLS filters rather than rejecting, so a blocked delete looks like a
+    // successful one -- an empty representation is how it admits to that.
+    if (!Array.isArray(fallback.body) || fallback.body.length === 0) leaked += 1;
   }
   if (leaked) {
     // Loud on purpose. Silent cleanup failure is what caused this.
