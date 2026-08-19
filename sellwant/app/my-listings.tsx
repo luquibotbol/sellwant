@@ -16,8 +16,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
 import {
   myListings,
-  cancelListing,
-  deleteListing,
+  removeListing,
   ListingWithPoster,
   ListingStatus,
   ListingType,
@@ -37,7 +36,6 @@ export default function MyListingsScreen() {
   const listings = useAsync(myListings, []);
   const [which, setWhich] = useState<Which>('all');
   const [busy, setBusy] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,38 +64,20 @@ export default function MyListingsScreen() {
   const remove = async (id: string) => {
     if (removing !== id) {
       setRemoving(id);
-      setConfirming(null);
       return;
     }
     setBusy(id);
     setError(null);
     try {
-      await deleteListing(id);
+      // Taken down rather than deleted when somebody has committed; the list
+      // reloads either way and shows the status it ended up in.
+      await removeListing(id);
       listings.reload();
     } catch (e: any) {
-      setError(e?.message ?? 'Could not delete that');
+      setError(e?.message ?? 'Could not remove that');
     } finally {
       setBusy(null);
       setRemoving(null);
-    }
-  };
-
-  const takeDown = async (id: string) => {
-    if (confirming !== id) {
-      setConfirming(id);
-      setRemoving(null);
-      return;
-    }
-    setBusy(id);
-    setError(null);
-    try {
-      await cancelListing(id);
-      listings.reload();
-    } catch (e: any) {
-      setError(e?.message ?? 'Could not take that down');
-    } finally {
-      setBusy(null);
-      setConfirming(null);
     }
   };
 
@@ -185,39 +165,27 @@ export default function MyListingsScreen() {
                         onPress={() => router.navigate(`/edit/${l.id}` as never)}
                       />
                       <Button
-                        title={confirming === l.id ? 'Tap again to take it down' : 'Take down'}
+                        title={removing === l.id ? 'Tap again to delete' : 'Delete'}
                         variant="outline"
                         size="sm"
                         loading={busy === l.id}
-                        onPress={() => takeDown(l.id)}
+                        onPress={() => remove(l.id)}
                       />
-                      {/* Delete only exists where it can actually work: once
-                          anyone has committed, removing the row would erase
-                          their side of the deal too, so the database refuses
-                          and taking it down is the only exit. */}
-                      {l.offer_count === 0 && (
-                        <Button
-                          title={removing === l.id ? 'Tap again to delete' : 'Delete'}
-                          variant="ghost"
-                          size="sm"
-                          loading={busy === l.id}
-                          onPress={() => remove(l.id)}
-                        />
-                      )}
                     </View>
                   )}
 
                   {removing === l.id && (
                     <Text variant="caption" tone="destructive" style={styles.note}>
-                      Deleting removes it completely. Taking it down keeps it in your
-                      history instead.
+                      {l.offer_count > 0
+                        ? `${l.offer_count} ${l.offer_count === 1 ? 'person has' : 'people have'} offered on this. Deleting ends that.`
+                        : 'This removes the listing.'}
                     </Text>
                   )}
 
-                  {/* Taking a sell listing down frees its registered QR, so the
+                  {/* Removing a sell listing frees its registered QR, so the
                       seller can list the same ticket again later without
                       colliding with themselves. Worth saying out loud. */}
-                  {confirming === l.id && selling && (
+                  {removing === l.id && selling && (
                     <Text variant="caption" tone="subtle" style={styles.note}>
                       This frees the ticket code, so you can post it again later.
                     </Text>
