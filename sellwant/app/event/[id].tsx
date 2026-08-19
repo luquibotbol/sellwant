@@ -148,7 +148,22 @@ export default function ListingDetailScreen() {
       {/* Photos, when there are any. Above the poster card because a picture
           of the venue answers "is this the thing I want" before "who is
           selling it" -- and below the price, which is what people came for. */}
-      {!!l.image_urls?.length && (
+      {/* Photos, when there are any. Above the poster card because a picture
+          of the venue answers "is this the thing I want" before "who is
+          selling it" -- and below the price, which is what people came for.
+
+          One photo is rendered on its own rather than in the scroller: a
+          percentage width inside a horizontal ScrollView resolves against a
+          content box that is itself sized by its content, so `width: 100%`
+          collapsed to zero and the image loaded, decoded, and drew nothing. */}
+      {l.image_urls?.length === 1 ? (
+        <Image
+          source={{ uri: l.image_urls[0] }}
+          style={styles.photoSingle}
+          resizeMode="cover"
+          accessibilityLabel="Listing photo"
+        />
+      ) : !!l.image_urls?.length ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -159,13 +174,13 @@ export default function ListingDetailScreen() {
             <Image
               key={url}
               source={{ uri: url }}
-              style={[styles.photo, l.image_urls.length === 1 && styles.photoSingle]}
+              style={styles.photo}
               resizeMode="cover"
               accessibilityLabel="Listing photo"
             />
           ))}
         </ScrollView>
-      )}
+      ) : null}
 
       {anon && (
         <Card style={styles.poster} onPress={() => router.navigate(signInHere as never)}>
@@ -363,8 +378,14 @@ const styles = StyleSheet.create({
   gallery: { marginTop: space[5], flexGrow: 0 },
   galleryInner: { gap: space[3] },
   photo: { width: 220, height: 150, borderRadius: radius.lg, backgroundColor: colors.muted },
-  // One photo has no row to scroll, so let it use the width it has.
-  photoSingle: { width: '100%', height: 200 },
+  // Full width, and outside the horizontal scroller -- see the render.
+  photoSingle: {
+    width: '100%',
+    height: 200,
+    marginTop: space[5],
+    borderRadius: radius.lg,
+    backgroundColor: colors.muted,
+  },
   ownerRow: { flexDirection: 'row', gap: space[3] },
   ownerButton: { flex: 1 },
   ownerDelete: { marginTop: space[3], alignSelf: 'center' },
