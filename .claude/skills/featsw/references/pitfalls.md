@@ -45,6 +45,13 @@ one account destroys the counterparty's record of a completed trade, and a
 reported user can erase the reports about them by leaving. Before adding a
 cascade, ask whose data is downstream.
 
+**A CHECK constraint may not contain a subquery.** Validating every element of
+an array needs one, so the predicate has to live in an `IMMUTABLE` function
+that the constraint calls. Inlining it fails with "cannot use subquery in check
+constraint" — and because the SQL editor runs a file in one transaction, that
+error silently rolls back everything above it too. A migration that appears to
+have done nothing at all usually failed on its last statement, not its first.
+
 ## Pagination and queries
 
 **Offset pagination needs a total order.** Ordering by `event_date` alone,
