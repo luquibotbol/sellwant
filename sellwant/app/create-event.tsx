@@ -194,6 +194,7 @@ export default function CreateListingScreen() {
           onChange={setDate}
           error={errors.date}
           min={todayISO()}
+          allowNone
         />
 
         <Input

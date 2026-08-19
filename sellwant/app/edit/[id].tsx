@@ -187,7 +187,7 @@ export default function EditListingScreen() {
         {/* No `min` here, unlike creating: an existing listing may legitimately
             be for a date already past, and refusing to render it would trap
             the owner out of fixing the title. */}
-        <DateField label="When" value={date} onChange={setDate} />
+        <DateField label="When" value={date} onChange={setDate} allowNone />
       </View>
       <Input
         label="Anything else"
