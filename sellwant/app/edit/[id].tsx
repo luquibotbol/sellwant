@@ -15,6 +15,7 @@ import {
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { money } from '@/lib/format';
 import { City, toCity } from '@/lib/cities';
+import PhotoField from '@/components/PhotoField';
 import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
 import { getListing, updateListing, listLocationSuggestions } from '@/services/data';
@@ -39,6 +40,7 @@ export default function EditListingScreen() {
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
   const [city, setCity] = useState<City | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
   // What the listing held before cities existed, so the field can say what is
   // about to be replaced instead of silently dropping it.
   const [originalLocation, setOriginalLocation] = useState<string | null>(null);
@@ -56,6 +58,7 @@ export default function EditListingScreen() {
     setTitle(l.title);
     setPrice(String(l.price_cents / 100));
     setCity(toCity(l.location));
+    setPhotos(l.image_urls ?? []);
     setOriginalLocation(l.location);
     setDate(l.event_date ?? '');
     setDescription(l.description ?? '');
@@ -126,6 +129,7 @@ export default function EditListingScreen() {
         title: title.trim(),
         price_cents: cents,
         location: city,
+        image_urls: photos,
         event_date: date || null,
         description: description.trim() || null,
       });
