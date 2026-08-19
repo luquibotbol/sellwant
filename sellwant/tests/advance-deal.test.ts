@@ -144,9 +144,27 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Cascades to lock_ins and offers.
+  // Every listing here has a lock_in by now, and owners may not delete those
+  // -- that is the point of the policy. A plain DELETE is filtered by RLS
+  // rather than rejected, so it reports success, removes nothing, and leaves
+  // the rows active and public: that is how 18 test listings ended up in the
+  // live feed. purge_test_listing is the fixture-only path that can.
+  let leaked = 0;
   for (const id of madeListings) {
-    await rest(sellerTok, `listings?id=eq.${id}`, { method: 'DELETE' });
+    const r = await fetch(`${URL}/rest/v1/rpc/purge_test_listing`, {
+      method: 'POST',
+      headers: hdrs(sellerTok),
+      body: JSON.stringify({ p_id: id }),
+    });
+    if (!r.ok) leaked += 1;
+  }
+  if (leaked) {
+    // Loud on purpose. Silent cleanup failure is what caused this.
+    console.error(
+      `\n!! ${leaked}/${madeListings.length} test listings could not be removed ` +
+        `and are live on the public feed.\n` +
+        `   Apply supabase/migrations/20260819_test_fixture_cleanup.sql.\n`
+    );
   }
   // completed_deals is not client-writable by design, so the restore goes
   // through the same admin path the trigger uses. Without it the counters
