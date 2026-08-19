@@ -468,7 +468,15 @@ export async function listActive(
     .from('listings')
     .select(LISTING_SELECT)
     .eq('status', 'active')
-    .order('event_date', { ascending: true, nullsFirst: false });
+    .order('event_date', { ascending: true, nullsFirst: false })
+    // A tiebreaker, and paging is why it matters. Dozens of listings share an
+    // event date and many have none at all, and Postgres is free to return
+    // tied rows in a different order each time. With offset paging that means
+    // a row can sit at position 19 in one request and 20 in the next: it comes
+    // back twice, which the feed de-duplicates, while whatever it displaced is
+    // never returned at all. Silently missing a listing is the worst failure
+    // this screen has.
+    .order('id', { ascending: true });
 
   if (opts.type) query = query.eq('type', opts.type);
   if (opts.categoryId) query = query.eq('category_id', opts.categoryId);

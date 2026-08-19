@@ -115,8 +115,10 @@ export default function FeedScreen() {
         return [...prev, ...next.filter((l) => !seen.has(l.id))];
       });
     } catch {
-      // A failed page is not a failed screen: what is already listed stays.
-      setExhausted(true);
+      // A failed page is not a failed screen: what is already listed stays,
+      // and the button stays too. Marking it exhausted here would turn one
+      // dropped request into "there is nothing more", with no way back short
+      // of changing a filter.
     } finally {
       setLoadingMore(false);
     }

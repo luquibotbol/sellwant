@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Pressable, ScrollView } from 'react-native';
 import Text from '@/components/ui/Text';
 import Input from '@/components/ui/Input';
@@ -28,6 +28,23 @@ export function CityField({ label = 'City', value, onChange, legacyValue, error 
   const [query, setQuery] = useState(value ?? '');
   const [focused, setFocused] = useState(false);
 
+  // Blur is deferred so a tap on an option lands first, which means the
+  // callback runs after the tap has already changed `value`. Reading `value`
+  // from the closure there gives the value from before the selection, and the
+  // field cleared itself the instant you picked a city. The ref is always the
+  // committed one; the timer handle lets a selection cancel the reset it no
+  // longer needs.
+  const committed = useRef<City | null>(value);
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    committed.current = value;
+  }, [value]);
+
+  useEffect(() => () => {
+    if (blurTimer.current) clearTimeout(blurTimer.current);
+  }, []);
+
   // The edit screen loads its listing after the first render, so the field has
   // to follow a value that arrives late.
   useEffect(() => {
@@ -38,6 +55,11 @@ export function CityField({ label = 'City', value, onChange, legacyValue, error 
   const show = focused && matches.length > 0;
 
   const commit = (city: City) => {
+    if (blurTimer.current) {
+      clearTimeout(blurTimer.current);
+      blurTimer.current = null;
+    }
+    committed.current = city;
     onChange(city);
     setQuery(city);
     setFocused(false);
@@ -62,13 +84,13 @@ export function CityField({ label = 'City', value, onChange, legacyValue, error 
         error={error}
         onFocus={() => setFocused(true)}
         // Delayed so a tap on an option registers before the list unmounts.
-        onBlur={() =>
-          setTimeout(() => {
+        onBlur={() => {
+          blurTimer.current = setTimeout(() => {
             setFocused(false);
             // Whatever was half-typed is not a city, so show the truth again.
-            setQuery(value ?? '');
-          }, 150)
-        }
+            setQuery(committed.current ?? '');
+          }, 150);
+        }}
         containerStyle={show ? styles.inputOpen : undefined}
       />
 
