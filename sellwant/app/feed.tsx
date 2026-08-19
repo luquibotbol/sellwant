@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -25,11 +25,14 @@ import {
 } from '@/components/ui';
 import { colors, space, radius, maxContentWidth } from '@/constants/theme';
 import { money, whenAndWhere } from '@/lib/format';
+import CitySelect from '@/components/CitySelect';
+import { City } from '@/lib/cities';
 import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
 import {
   getMyProfile,
   listActive,
+  FEED_PAGE_SIZE,
   listCategories,
   ListingType,
   ListingWithPoster,
@@ -50,6 +53,7 @@ export default function FeedScreen() {
   const [filter, setFilter] = useState<Filter>('all');
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [query, setQuery] = useState('');
+  const [city, setCity] = useState<City | null>(null);
   const [debounced, setDebounced] = useState('');
 
   // Search runs in Postgres, so debounce rather than firing per keystroke.
@@ -67,11 +71,58 @@ export default function FeedScreen() {
         type: filter === 'all' ? undefined : filter,
         q: debounced || undefined,
         categoryId: categoryId ?? undefined,
+        city: city ?? undefined,
       }),
-    [filter, debounced, categoryId]
+    [filter, debounced, categoryId, city]
   );
 
-  const searching = !!debounced || categoryId !== null;
+  // Pages after the first. useAsync owns page one and refetches it whenever a
+  // filter changes; these accumulate on top and reset with it.
+  const [more, setMore] = useState<ListingWithPoster[]>([]);
+  const [exhausted, setExhausted] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    setMore([]);
+    setExhausted(false);
+  }, [filter, debounced, categoryId, city]);
+
+  const rows = useMemo(
+    () => [...(listings.data ?? []), ...more],
+    [listings.data, more]
+  );
+
+  const loadMore = async () => {
+    // A short first page means there is no second one; asking again on every
+    // bounce of a scroll would be a request per frame.
+    if (loadingMore || exhausted || listings.loading) return;
+    if ((listings.data?.length ?? 0) < FEED_PAGE_SIZE) return setExhausted(true);
+
+    setLoadingMore(true);
+    try {
+      const next = await listActive({
+        type: filter === 'all' ? undefined : filter,
+        q: debounced || undefined,
+        categoryId: categoryId ?? undefined,
+        city: city ?? undefined,
+        offset: rows.length,
+      });
+      if (next.length < FEED_PAGE_SIZE) setExhausted(true);
+      // Filters can change mid-flight; dropping duplicates is cheaper than
+      // cancelling, and a repeated key is what makes a list flicker.
+      setMore((prev) => {
+        const seen = new Set([...(listings.data ?? []), ...prev].map((l) => l.id));
+        return [...prev, ...next.filter((l) => !seen.has(l.id))];
+      });
+    } catch {
+      // A failed page is not a failed screen: what is already listed stays.
+      setExhausted(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const searching = !!debounced || categoryId !== null || city !== null;
 
   // The site's default metadata, not just the feed's. expo-router keeps the
   // initial route mounted beneath every screen, so this Head wins everywhere
@@ -117,14 +168,17 @@ export default function FeedScreen() {
               the wordmark on a phone and got worse with every screen. */}
         </View>
 
-        <Input
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search by name or place"
-          autoCapitalize="none"
-          autoCorrect={false}
-          containerStyle={styles.search}
-        />
+        <View style={styles.searchRow}>
+          <Input
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search by name"
+            autoCapitalize="none"
+            autoCorrect={false}
+            containerStyle={styles.search}
+          />
+          <CitySelect value={city} onChange={setCity} />
+        </View>
 
         <View style={styles.tabs}>
           {FILTERS.map((f) => {
@@ -186,7 +240,15 @@ export default function FeedScreen() {
           </View>
         ) : (
           <FlatList
-            data={listings.data ?? []}
+            data={rows}
+            onEndReached={loadMore}
+            // Half a screen early, so the next page is usually already there.
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              loadingMore ? (
+                <ActivityIndicator color={colors.mutedForeground} style={styles.footer} />
+              ) : null
+            }
             keyExtractor={(l) => l.id}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
@@ -217,6 +279,7 @@ export default function FeedScreen() {
                   actionLabel="Clear filters"
                   onAction={() => {
                     setQuery('');
+                    setCity(null);
                     setCategoryId(null);
                   }}
                 />
@@ -236,7 +299,11 @@ export default function FeedScreen() {
               return (
                 <Card
                   accent={isSell ? 'sell' : 'want'}
-                  onPress={() => router.push(`/event/${item.id}` as never)}
+                  // navigate, not push: push mints a new stack entry every
+                  // time and expo-router stamps the URL with a key to tell
+                  // them apart, so the address people copy out of the bar and
+                  // paste to a friend carried __EXPO_ROUTER_key=undefined-...
+                  onPress={() => router.navigate(`/event/${item.id}` as never)}
                   style={styles.card}
                 >
                   <View style={styles.cardTop}>
@@ -312,7 +379,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[5],
     paddingBottom: space[4],
   },
-  search: { marginHorizontal: space[5], marginBottom: space[3] },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space[3],
+    marginHorizontal: space[5],
+    marginBottom: space[3],
+    // The dropdown is absolutely positioned inside CitySelect, so this row has
+    // to sit above the list it overlaps.
+    zIndex: 20,
+  },
+  search: { flex: 1, marginBottom: 0 },
   categoriesScroll: { flexGrow: 0, flexShrink: 0 },
   categories: { paddingHorizontal: space[5], gap: space[5], paddingBottom: space[3] },
   category: {
@@ -339,6 +416,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   tabActive: { backgroundColor: colors.muted },
+  footer: { paddingVertical: space[6] },
   list: { paddingHorizontal: space[5], paddingBottom: space[16], gap: space[3] },
   card: { marginBottom: space[3] },
   cardSkeleton: { height: 116, borderRadius: radius.xl, marginBottom: space[3] },

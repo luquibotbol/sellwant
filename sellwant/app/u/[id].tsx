@@ -124,7 +124,7 @@ export default function PublicProfileScreen() {
             key={l.id}
             accent={selling ? 'sell' : 'want'}
             style={styles.card}
-            onPress={() => router.push(`/event/${l.id}` as never)}
+            onPress={() => router.navigate(`/event/${l.id}` as never)}
           >
             <View style={styles.cardTop}>
               <Badge label={selling ? 'FOR SALE' : 'WANTED'} variant={selling ? 'sell' : 'want'} />

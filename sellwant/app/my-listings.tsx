@@ -148,7 +148,7 @@ export default function MyListingsScreen() {
                   key={l.id}
                   accent={selling ? 'sell' : 'want'}
                   style={styles.card}
-                  onPress={() => router.push(`/event/${l.id}` as never)}
+                  onPress={() => router.navigate(`/event/${l.id}` as never)}
                 >
                   <View style={styles.top}>
                     <Badge label={badge.label} variant={badge.variant} />
@@ -182,7 +182,7 @@ export default function MyListingsScreen() {
                         title="Edit"
                         variant="secondary"
                         size="sm"
-                        onPress={() => router.push(`/edit/${l.id}` as never)}
+                        onPress={() => router.navigate(`/edit/${l.id}` as never)}
                       />
                       <Button
                         title={confirming === l.id ? 'Tap again to take it down' : 'Take down'}

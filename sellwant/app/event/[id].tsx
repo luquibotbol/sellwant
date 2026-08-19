@@ -115,7 +115,7 @@ export default function ListingDetailScreen() {
       const created = await createLockIn(l);
       // Straight to the handoff -- the deal screen is where everything the
       // buyer needs now lives.
-      router.push(`/deal/${created.id}` as never);
+      router.navigate(`/deal/${created.id}` as never);
     } catch (e: any) {
       setLockError(e?.message ?? 'Could not lock this in');
     } finally {
@@ -165,7 +165,7 @@ export default function ListingDetailScreen() {
       )}
 
       {l.poster && (
-        <Card style={styles.poster} onPress={() => router.push(`/u/${l.user_id}` as never)}>
+        <Card style={styles.poster} onPress={() => router.navigate(`/u/${l.user_id}` as never)}>
           <View style={styles.posterHead}>
             <View style={styles.posterWho}>
               <Avatar uri={l.poster.profile_picture} name={l.poster.full_name} size={36} />
@@ -242,7 +242,7 @@ export default function ListingDetailScreen() {
                 <Button
                   title="Edit"
                   variant="secondary"
-                  onPress={() => router.push(`/edit/${l.id}` as never)}
+                  onPress={() => router.navigate(`/edit/${l.id}` as never)}
                   style={styles.ownerButton}
                 />
                 <Button

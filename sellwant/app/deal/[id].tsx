@@ -142,7 +142,7 @@ export default function DealScreen() {
         </Text>
       </View>
 
-      <Pressable onPress={() => d.listing && router.push(`/event/${d.listing.id}` as never)}>
+      <Pressable onPress={() => d.listing && router.navigate(`/event/${d.listing.id}` as never)}>
         <Text variant="title" style={styles.title}>
           {d.listing?.title ?? 'Listing removed'}
         </Text>

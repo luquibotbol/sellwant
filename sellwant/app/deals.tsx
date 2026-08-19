@@ -68,7 +68,7 @@ export default function DealsScreen() {
                   key={d.id}
                   accent={role === 'buyer' ? 'want' : 'sell'}
                   style={styles.card}
-                  onPress={() => router.push(`/deal/${d.id}` as never)}
+                  onPress={() => router.navigate(`/deal/${d.id}` as never)}
                 >
                   <View style={styles.top}>
                     <Badge label={badge.label} variant={badge.variant} />
