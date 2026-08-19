@@ -313,10 +313,22 @@ describe('offer stats — only the other side counts', () => {
     return id;
   }
 
-  const offer = (tok: string, listingId: string, who: string, cents: number) =>
+  const offer = (
+    tok: string,
+    listingId: string,
+    who: string,
+    cents: number,
+    /** Required when the poster answers: they may only counter a real offer. */
+    parentOfferId?: string
+  ) =>
     rest(tok, 'offers', {
       method: 'POST',
-      body: JSON.stringify({ listing_id: listingId, from_user: who, amount_cents: cents }),
+      body: JSON.stringify({
+        listing_id: listingId,
+        from_user: who,
+        amount_cents: cents,
+        ...(parentOfferId ? { parent_offer_id: parentOfferId } : {}),
+      }),
     });
 
   const stats = async (id: string) =>
@@ -337,17 +349,41 @@ describe('offer stats — only the other side counts', () => {
     // Mirror image: on an ask the stat is a min(), so the poster undercutting
     // themselves would drag the advertised price down.
     const id = await freshListing('ask', 2000);
-    await offer(buyerTok, id, BUYER.id, 2600);
+    const bid = await offer(buyerTok, id, BUYER.id, 2600);
     expect(await stats(id)).toMatchObject({ best_offer_cents: 2600, offer_count: 1 });
 
-    await offer(sellerTok, id, SELLER.id, 2100);
+    await offer(sellerTok, id, SELLER.id, 2100, bid.body[0].id);
     expect(await stats(id)).toMatchObject({ best_offer_cents: 2600, offer_count: 1 });
+  });
+
+  test('the poster cannot open a bid on their own listing', async () => {
+    // The stats fix hid this: the poster's own row was excluded from the
+    // headline number but still sat on the public board, under the heading
+    // that tells strangers what people will pay. Countering is legitimate --
+    // opening a bid on yourself is inventing demand.
+    const id = await freshListing('sell', 3500);
+    const bare = await offer(sellerTok, id, SELLER.id, 9999);
+    expect(bare.status).toBe(403);
+
+    const rows = (await rest(buyerTok, `offers?select=id&listing_id=eq.${id}`)).body;
+    expect(rows.length).toBe(0);
+  });
+
+  test('a counter must answer somebody else, not the poster themselves', async () => {
+    const id = await freshListing('sell', 3500);
+    const bid = await offer(buyerTok, id, BUYER.id, 3000);
+    const counter = await offer(sellerTok, id, SELLER.id, 3200, bid.body[0].id);
+    expect(counter.status).toBe(201);
+
+    // Countering their own counter would rebuild the same fake ladder.
+    const chained = await offer(sellerTok, id, SELLER.id, 3300, counter.body[0].id);
+    expect(chained.status).toBe(403);
   });
 
   test('the counter is still stored and visible, just not scored', async () => {
     const id = await freshListing('sell', 3500);
-    await offer(buyerTok, id, BUYER.id, 3000);
-    await offer(sellerTok, id, SELLER.id, 3200);
+    const bid = await offer(buyerTok, id, BUYER.id, 3000);
+    await offer(sellerTok, id, SELLER.id, 3200, bid.body[0].id);
     const rows = (await rest(buyerTok, `offers?select=amount_cents,from_user&listing_id=eq.${id}&status=eq.open`)).body;
     // Both rows exist -- the board shows the negotiation, the stat shows demand.
     expect(rows.length).toBe(2);

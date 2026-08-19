@@ -11,8 +11,7 @@ import {
   getSession,
   createLockIn,
   getCounterpartyContact,
-  cancelListing,
-  deleteListing,
+  removeListing,
 } from '@/services/data';
 
 export default function ListingDetailScreen() {
@@ -21,10 +20,10 @@ export default function ListingDetailScreen() {
   const session = useAsync(getSession, []);
   const [locking, setLocking] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
-  // Take down and delete each arm on first tap and fire on the second, so a
-  // stray tap on the screen people reach most often cannot destroy a listing.
-  const [arming, setArming] = useState<'cancel' | 'delete' | null>(null);
-  const [busy, setBusy] = useState<'cancel' | 'delete' | null>(null);
+  // Arms on the first tap and fires on the second, so a stray tap on the
+  // screen people reach most often cannot destroy a listing.
+  const [arming, setArming] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [ownerError, setOwnerError] = useState<string | null>(null);
 
   // Returns null unless a lock-in already exists between us, so this doubles
@@ -77,34 +76,26 @@ export default function ListingDetailScreen() {
   const anon = !session.data;
   const signInHere = `/signin?returnTo=${encodeURIComponent(`/event/${l.id}`)}`;
 
-  const takeDown = async () => {
-    if (arming !== 'cancel') return (setArming('cancel'), setOwnerError(null));
-    setBusy('cancel');
+  const remove = async () => {
+    if (!arming) return (setArming(true), setOwnerError(null));
+    setBusy(true);
     setOwnerError(null);
     try {
-      await cancelListing(id);
+      const outcome = await removeListing(id);
+      if (outcome === 'deleted') {
+        // The page we are on no longer exists, so replace rather than push --
+        // going back should not land on a listing that is gone.
+        router.replace('/my-listings' as never);
+        return;
+      }
+      // Still there, just no longer listed. Reload rather than navigate away,
+      // so the screen can explain what happened to it.
       listing.reload();
     } catch (e) {
-      setOwnerError((e as Error)?.message ?? 'Could not take that down');
+      setOwnerError((e as Error)?.message ?? 'Could not remove that');
     } finally {
-      setBusy(null);
-      setArming(null);
-    }
-  };
-
-  const remove = async () => {
-    if (arming !== 'delete') return (setArming('delete'), setOwnerError(null));
-    setBusy('delete');
-    setOwnerError(null);
-    try {
-      await deleteListing(id);
-      // The page we are on no longer exists, so replace rather than push --
-      // going back should not land on a listing that is gone.
-      router.replace('/my-listings' as never);
-    } catch (e) {
-      setOwnerError((e as Error)?.message ?? 'Could not delete that');
-      setBusy(null);
-      setArming(null);
+      setBusy(false);
+      setArming(false);
     }
   };
 
@@ -246,31 +237,19 @@ export default function ListingDetailScreen() {
                   style={styles.ownerButton}
                 />
                 <Button
-                  title={arming === 'cancel' ? 'Tap again to take it down' : 'Take down'}
+                  title={arming ? 'Tap again to delete' : 'Delete'}
                   variant="outline"
-                  loading={busy === 'cancel'}
-                  onPress={takeDown}
+                  loading={busy}
+                  onPress={remove}
                   style={styles.ownerButton}
                 />
               </View>
 
-              {/* Only offered where it can succeed: once anyone has committed,
-                  deleting would erase their side of the trade too, so the
-                  database refuses and taking it down is the only way out. */}
-              {l.offer_count === 0 && (
-                <Button
-                  title={arming === 'delete' ? 'Tap again to delete' : 'Delete'}
-                  variant="ghost"
-                  size="sm"
-                  loading={busy === 'delete'}
-                  onPress={remove}
-                  style={styles.ownerDelete}
-                />
-              )}
-
               <Text variant="caption" tone="subtle" style={styles.actionNote}>
-                {arming === 'delete'
-                  ? 'Deleting removes it for good. Taking it down keeps it in your history.'
+                {arming
+                  ? l.offer_count > 0
+                    ? `${l.offer_count} ${l.offer_count === 1 ? 'person has' : 'people have'} offered on this. Deleting ends that.`
+                    : 'This removes the listing.'
                   : l.offer_count > 0
                     ? `${l.offer_count} ${l.offer_count === 1 ? 'person has' : 'people have'} offered — they'll see any change you make.`
                     : 'Only you can see these controls.'}
@@ -279,7 +258,7 @@ export default function ListingDetailScreen() {
           ) : (
             <Text variant="small" tone="subtle" style={styles.mine}>
               {l.status === 'locked'
-                ? 'Your listing is locked into a deal, so it can’t be edited. Open it from Your deals.'
+                ? 'Your listing is locked into a deal, so it can\u2019t be edited. Open it from Your deals.'
                 : `This listing is ${l.status} — it can no longer be edited.`}
             </Text>
           )}

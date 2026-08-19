@@ -647,19 +647,34 @@ export async function cancelListing(id: string) {
  * other person's record of a trade along with your own. Once there is a deal,
  * cancelling is the only exit, and it keeps the history.
  */
-export async function deleteListing(id: string) {
+/** What removing a listing actually did to it. */
+export type Removal = 'deleted' | 'taken-down';
+
+/**
+ * Remove a listing from the market.
+ *
+ * One action, because from the owner's side there is one intention: this
+ * should stop being listed. Whether the row can go with it is a question about
+ * somebody else's records, not about what they asked for -- once a person has
+ * committed, deleting the listing would take their side of the trade with it,
+ * so the database refuses and the listing is taken down instead.
+ *
+ * Returns which of the two happened, so the screen can say so rather than
+ * leaving someone to guess whether "delete" deleted anything.
+ */
+export async function removeListing(id: string): Promise<Removal> {
   const { error, count } = await supabase
     .from('listings')
     .delete({ count: 'exact' })
     .eq('id', id);
   if (error) await fail(error);
-  // RLS filters rather than throwing, so a blocked delete looks like success
-  // with nothing removed. Say what actually happened.
-  if (count === 0) {
-    throw new Error(
-      'This listing has a deal attached, so it can only be taken down, not deleted.'
-    );
-  }
+  if (count && count > 0) return 'deleted';
+
+  // RLS filters rather than throwing, so a blocked delete arrives as a
+  // success that removed nothing. That is the signal a deal is attached.
+  const { error: cancelError } = await supabase.rpc('cancel_listing', { p_id: id });
+  if (cancelError) await fail(cancelError);
+  return 'taken-down';
 }
 
 // ---------------------------------------------------------------- lock-ins

@@ -1,0 +1,2 @@
+1. Nice now add an option to add pictures to what they want or are selling, max 3 images per listing. this will be optional of course, and make sure they don't upload their tickets, this image will show when someone is vewing the listings. plan, build, test,merge
+2. 

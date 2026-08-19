@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Text, Input } from '@/components/ui';
 import { colors, radius, space } from '@/constants/theme';
 import { City, matchCities } from '@/lib/cities';
@@ -24,42 +24,6 @@ interface Props {
 export function CitySelect({ value, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const container = useRef<View | null>(null);
-
-  /**
-   * Close when the click lands anywhere else.
-   *
-   * A dropdown that only closes via its own trigger is a dropdown people leave
-   * open: they tap a card, the panel stays over the list, and the way out is
-   * not obvious. There is no press-outside on native, so this listens on the
-   * document -- capture phase, so it still fires when the handler underneath
-   * stops propagation, and pointerdown rather than click so it closes on the
-   * press rather than waiting for release.
-   */
-  useEffect(() => {
-    if (!open || Platform.OS !== 'web' || typeof document === 'undefined') return;
-    const onDown = (e: Event) => {
-      const node = container.current as unknown as HTMLElement | null;
-      if (node && e.target instanceof Node && node.contains(e.target)) return;
-      setOpen(false);
-      setQuery('');
-    };
-    // Escape is the keyboard half of the same gesture.
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false);
-        setQuery('');
-      }
-    };
-    document.addEventListener('pointerdown', onDown, true);
-    // Capture, like the pointer listener: the focused text input handles
-    // Escape itself and the event does not reliably reach the document.
-    document.addEventListener('keydown', onKey, true);
-    return () => {
-      document.removeEventListener('pointerdown', onDown, true);
-      document.removeEventListener('keydown', onKey, true);
-    };
-  }, [open]);
 
   const matches = matchCities(query);
 
@@ -70,7 +34,7 @@ export function CitySelect({ value, onChange }: Props) {
   };
 
   return (
-    <View ref={container} style={styles.container}>
+    <View style={styles.container}>
       <Pressable
         onPress={() => {
           setQuery('');
