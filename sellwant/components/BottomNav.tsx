@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Pressable, Platform } from 'react-native';
 import { usePathname, router } from 'expo-router';
 import { useSession } from '@/hooks/useSession';
@@ -56,19 +56,33 @@ export function BottomNav() {
   });
 
   /**
-   * Recounted on every navigation.
+   * Recounted after the screens where something could have changed, not on
+   * every navigation.
    *
-   * The number has to be right just after you act, and acting always ends in
-   * a navigation -- confirming a deal, replying to an offer. Polling would be
-   * both slower to reflect that and more expensive. A failure leaves the
-   * previous counts rather than flashing them to zero, since a tab that loses
-   * its badge reads as "you already dealt with it".
+   * Only three places move these numbers: a listing (where an offer is made or
+   * a deal locked), the offers inbox, and a handoff. Counting on every route
+   * change instead meant two queries per tap, so browsing twenty listings cost
+   * forty requests to learn nothing. Leaving one of those three is the cheap
+   * signal that it is worth asking again.
+   *
+   * A failure leaves the previous counts rather than dropping to zero, since a
+   * tab that quietly loses its number reads as "you already dealt with it".
    */
+  const previous = useRef<string | null>(null);
+
   useEffect(() => {
+    const cameFrom = previous.current;
+    previous.current = pathname;
+
     if (!session) {
       setCounts({ deals: 0, offers: 0 });
       return;
     }
+
+    const ACTED_ON = ['/event/', '/deal/', '/offers'];
+    const firstLoad = cameFrom === null;
+    if (!firstLoad && !ACTED_ON.some((prefix) => cameFrom.startsWith(prefix))) return;
+
     let cancelled = false;
     pendingCounts()
       .then((next) => {
