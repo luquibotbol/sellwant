@@ -1,2 +1,4 @@
-1. Nice now add an option to add pictures to what they want or are selling, max 3 images per listing. this will be optional of course, and make sure they don't upload their tickets, this image will show when someone is vewing the listings. plan, build, test,merge
-2. 
+1. /featsw Nice now add an option to add pictures to what they want or are selling, max 3 images per listing. this will be optional of course, and make sure they don't upload their tickets, this image will show when someone is vewing the listings. 
+2. /featsw Better deals view, can se canceled, can search, can clear the view, show 5 max, or click load more, show buy last modified or taken action. filter by buying vs selling. show the active deals in the first page and you can see canceled later in another tab. 
+3. /featsw at the bottom next to deals and offers, show "Deals (n)" n being the number of listing that are pending the users action, max it out at 9 and if tehre is none just show "Deals" or "Offers"
+4. /featsw make a report form that lets users report bugs or ideas that will end up showing up in the /admin  

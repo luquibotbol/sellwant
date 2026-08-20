@@ -173,3 +173,32 @@ card and the whole offer board.
 **Signal:** when a change makes layout depend on user data that was previously
 ignored, ask what the most extreme legal value does to the page. The upload
 limits had been reviewed; they just answered a different question.
+
+---
+
+### 2026-08-20 — The photo feature was half-wired for a day and nobody could tell
+
+`PhotoField` was added to the create form and the edit screen in the same
+change. Only the create form actually rendered it. The edit screen imported it,
+kept its state, loaded `image_urls` into that state and wrote the same value
+back on save — so nothing broke, nothing was lost, and the feature was simply
+absent from half the places it was supposed to be. Found by opening the screen
+while building something else entirely.
+
+**Signal:** when one component is wired into two screens, open both. The
+compiler cannot tell you a component is missing from a render, and a
+round-trip that preserves data hides the gap completely.
+
+---
+
+### 2026-08-20 — Uniform framing beat per-image measurement
+
+The first fix for a cropped photo measured each image and set the height from
+its own aspect ratio, which shows the whole picture but makes every listing a
+different height. The ask turned out to be the opposite: same frame everywhere,
+whole picture inside it. `contain` in a fixed 4:3 box does both, needs no
+measurement, and deleted the `Image.getSize` machinery it replaced.
+
+**Signal:** "show the whole image" and "make them all look the same" sound like
+the same request and are not. Ask which one is wanted before reaching for
+measurement.

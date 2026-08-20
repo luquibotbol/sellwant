@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Text, Card, Badge, Avatar, Button, Separator, ErrorState, EmptyState } from '@/components/ui';
 import OfferBoard from '@/components/OfferBoard';
+import PhotoCarousel from '@/components/PhotoCarousel';
 import { colors, space, radius, maxContentWidth } from '@/constants/theme';
 import { money } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
@@ -25,51 +26,6 @@ export default function ListingDetailScreen() {
   const [arming, setArming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ownerError, setOwnerError] = useState<string | null>(null);
-  const soloPhoto =
-    listing.data?.image_urls?.length === 1 ? listing.data.image_urls[0] : null;
-  /** The measured shape of the single photo, tagged with the URL it was
-   *  measured from. Tagged rather than bare, because this screen is reused
-   *  across listings: a bare ratio would size the next listing's photo with
-   *  the previous one's proportions until the new measurement landed. */
-  const [photoShape, setPhotoShape] = useState<{
-    uri: string;
-    ratio: number;
-  } | null>(null);
-
-  // Image.getSize rather than the Image's own onLoad: react-native-web does
-  // not populate nativeEvent.source, so onLoad never fired with usable
-  // dimensions and every photo kept the placeholder shape. getSize works on
-  // both web and native.
-  useEffect(() => {
-    if (!soloPhoto) return;
-    let cancelled = false;
-    Image.getSize(
-      soloPhoto,
-      (w, h) => {
-        if (!cancelled && w && h) setPhotoShape({ uri: soloPhoto, ratio: w / h });
-      },
-      () => {
-        // A URL we cannot measure still renders -- as an empty box, exactly as
-        // it did before -- so there is nothing useful to say to the reader.
-        // Leaving the shape unset keeps the placeholder ratio.
-      }
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [soloPhoto]);
-  /** 4:3 until measured. Any fixed number crops or letterboxes something; this
-   *  one is only ever on screen for the moment before the real ratio lands. */
-  const measured = photoShape?.uri === soloPhoto ? photoShape.ratio : 4 / 3;
-  /** Floored at 1:2. Nothing bounds a photo's dimensions -- the storage rules
-   *  cap count, byte size and mime type, so a 1200x6000 screenshot is a legal
-   *  upload -- and at phone width that is 1675px of image sitting on top of
-   *  the seller card and the whole offer board. `contain` means a photo past
-   *  the floor is still shown whole, just fitted inside a 1:2 box rather than
-   *  setting the height of the page. Ordinary phone photos are 3:4 or 9:16 and
-   *  never reach it. */
-  const photoRatio = Math.max(measured, 0.5);
-
   // Returns null unless a lock-in already exists between us, so this doubles
   // as the check for whether the deal is live.
   //
@@ -189,42 +145,10 @@ export default function ListingDetailScreen() {
         )}
       </Card>
 
-      {/* Photos, when there are any. Above the poster card because a picture
-          of the venue answers "is this the thing I want" before "who is
-          selling it" -- and below the price, which is what people came for. */}
-      {/* Photos, when there are any. Above the poster card because a picture
-          of the venue answers "is this the thing I want" before "who is
-          selling it" -- and below the price, which is what people came for.
-
-          One photo is rendered on its own rather than in the scroller: a
-          percentage width inside a horizontal ScrollView resolves against a
-          content box that is itself sized by its content, so `width: 100%`
-          collapsed to zero and the image loaded, decoded, and drew nothing. */}
-      {l.image_urls?.length === 1 ? (
-        <Image
-          source={{ uri: l.image_urls[0] }}
-          style={[styles.photoSingle, { aspectRatio: photoRatio }]}
-          resizeMode="contain"
-          accessibilityLabel="Listing photo"
-        />
-      ) : !!l.image_urls?.length ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.gallery}
-          contentContainerStyle={styles.galleryInner}
-        >
-          {l.image_urls.map((url) => (
-            <Image
-              key={url}
-              source={{ uri: url }}
-              style={styles.photo}
-              resizeMode="cover"
-              accessibilityLabel="Listing photo"
-            />
-          ))}
-        </ScrollView>
-      ) : null}
+      {/* Above the poster card because a picture of the thing answers "is this
+          what I want" before "who is selling it", and below the price, which
+          is what people came for. */}
+      <PhotoCarousel urls={l.image_urls ?? []} />
 
       {anon && (
         <Card style={styles.poster} onPress={() => router.navigate(signInHere as never)}>
@@ -419,19 +343,6 @@ const styles = StyleSheet.create({
   action: { marginTop: space[6] },
   actionNote: { marginTop: space[3], textAlign: 'center' },
   mine: { marginTop: space[6], textAlign: 'center' },
-  gallery: { marginTop: space[5], flexGrow: 0 },
-  galleryInner: { gap: space[3] },
-  photo: { width: 220, height: 150, borderRadius: radius.lg, backgroundColor: colors.muted },
-  // Full width, and outside the horizontal scroller -- see the render.
-  // No fixed height: the height comes from an aspectRatio set once the image
-  // reports its own dimensions, so a tall photo is shown whole rather than
-  // cropped to a 200px band.
-  photoSingle: {
-    width: '100%',
-    marginTop: space[5],
-    borderRadius: radius.lg,
-    backgroundColor: colors.muted,
-  },
   ownerRow: { flexDirection: 'row', gap: space[3] },
   ownerButton: { flex: 1 },
   ownerDelete: { marginTop: space[3], alignSelf: 'center' },

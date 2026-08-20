@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Image, Pressable, ActivityIndicator } from 'react-native';
-import { Text } from '@/components/ui';
-import { colors, radius, space } from '@/constants/theme';
+import { View, StyleSheet } from 'react-native';
+import { Text, Button } from '@/components/ui';
+import PhotoCarousel from '@/components/PhotoCarousel';
+import { space } from '@/constants/theme';
 import {
   MAX_LISTING_PHOTOS,
   pickListingPhotos,
@@ -73,36 +74,21 @@ export function PhotoField({ value, onChange }: Props) {
         Photos <Text variant="small" tone="subtle">— optional, up to {MAX_LISTING_PHOTOS}</Text>
       </Text>
 
-      <View style={styles.row}>
-        {value.map((url) => (
-          <View key={url} style={styles.thumbWrap}>
-            <Image source={{ uri: url }} style={styles.thumb} resizeMode="cover" />
-            <Pressable
-              onPress={() => remove(url)}
-              style={styles.removeBtn}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Remove photo"
-            >
-              <Text variant="caption" tone="inverse">✕</Text>
-            </Pressable>
-          </View>
-        ))}
+      {/* The same carousel the listing page uses, so what you are looking at
+          while posting is what a buyer will see -- including the letterboxing
+          on a tall photo, which is worth discovering before you publish and
+          not after. */}
+      <PhotoCarousel urls={value} onRemove={remove} />
 
-        {remaining > 0 && (
-          <Pressable
-            onPress={add}
-            disabled={busy}
-            style={({ pressed }) => [styles.add, pressed && styles.addPressed]}
-          >
-            {busy ? (
-              <ActivityIndicator color={colors.mutedForeground} />
-            ) : (
-              <Text variant="title" tone="subtle">+</Text>
-            )}
-          </Pressable>
-        )}
-      </View>
+      {remaining > 0 && (
+        <Button
+          title={value.length ? `Add another (${remaining} left)` : 'Add photos'}
+          variant="secondary"
+          loading={busy}
+          onPress={add}
+          style={styles.add}
+        />
+      )}
 
       {/* Said plainly, because the check cannot catch everything: a photo of a
           ticket at an angle, or a barcode rather than a QR, may still get
@@ -124,36 +110,7 @@ export function PhotoField({ value, onChange }: Props) {
 const styles = StyleSheet.create({
   container: { marginBottom: space[5] },
   label: { marginBottom: space[2] },
-  row: { flexDirection: 'row', gap: space[3], flexWrap: 'wrap' },
-  thumbWrap: { position: 'relative' },
-  thumb: {
-    width: 84,
-    height: 84,
-    borderRadius: radius.lg,
-    backgroundColor: colors.muted,
-  },
-  removeBtn: {
-    position: 'absolute',
-    top: -space[2],
-    right: -space[2],
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.foreground,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  add: {
-    width: 84,
-    height: 84,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addPressed: { backgroundColor: colors.muted },
+  add: { marginTop: space[4] },
   hint: { marginTop: space[3], lineHeight: 16 },
 });
 
