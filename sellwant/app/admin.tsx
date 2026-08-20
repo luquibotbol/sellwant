@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import Head from 'expo-router/head';
-import { Text, Card, Badge, Button, Separator, EmptyState } from '@/components/ui';
+import { Text, Card, Badge, Button, Separator, EmptyState, SegmentedFilter } from '@/components/ui';
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { money, relativeTime } from '@/lib/format';
-import { FunnelChart, CompositionBar } from '@/components/AdminCharts';
+import { FunnelChart, CompositionBar, TimeSeriesBars } from '@/components/AdminCharts';
 import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
 import {
   adminStats,
+  signupsOverTime,
+  Bucket,
   adminReports,
   adminReviewReport,
   adminSetSuspended,
@@ -45,6 +47,8 @@ function Stat({ label, value, sub }: { label: string; value: string | number; su
 export default function AdminScreen() {
   const session = useSession();
   const stats = useAsync(adminStats, []);
+  const [bucket, setBucket] = useState<Bucket>('day');
+  const signups = useAsync(() => signupsOverTime(bucket), [bucket]);
   const [showReviewed, setShowReviewed] = useState(false);
   const reports = useAsync(() => adminReports(showReviewed), [showReviewed]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -103,6 +107,35 @@ export default function AdminScreen() {
         <Stat label="last 7 days" value={s.users.last_7d} sub={`${s.users.last_24h} today`} />
         <Separator style={styles.vline} />
         <Stat label="active this week" value={s.users.active_7d} sub={`${s.users.via_google} via Google`} />
+      </Card>
+
+      {/* Signups over time ------------------------------------------- */}
+      <Text variant="heading" style={styles.section}>
+        New accounts
+      </Text>
+      <Card style={styles.chartCard}>
+        <SegmentedFilter
+          options={[
+            { value: 'day' as Bucket, label: 'Daily' },
+            { value: 'week' as Bucket, label: 'Weekly' },
+            { value: 'month' as Bucket, label: 'Monthly' },
+          ]}
+          value={bucket}
+          onChange={setBucket}
+        />
+        {signups.error ? (
+          <Text variant="small" tone="destructive" style={styles.chartNote}>
+            {signups.error.message}
+          </Text>
+        ) : signups.data ? (
+          <TimeSeriesBars points={signups.data} />
+        ) : (
+          // Keeps the card's height while the next granularity loads, so
+          // switching Daily/Weekly does not make the page jump.
+          <View style={styles.chartLoading}>
+            <ActivityIndicator color={colors.mutedForeground} />
+          </View>
+        )}
       </Card>
 
       {/* Funnel — the most useful thing on the page -------------------- */}
@@ -295,6 +328,8 @@ const styles = StyleSheet.create({
   centered: { alignItems: 'center', justifyContent: 'center' },
   sectionFirst: { marginTop: space[5], marginBottom: space[3] },
   chartCard: { marginTop: space[3] },
+  chartNote: { marginTop: space[4] },
+  chartLoading: { height: 176, alignItems: 'center', justifyContent: 'center' },
   section: { marginTop: space[8], marginBottom: space[3] },
   statRow: { flexDirection: 'row', alignItems: 'center' },
   statRowStacked: { flexDirection: 'row', alignItems: 'center', marginTop: space[3] },

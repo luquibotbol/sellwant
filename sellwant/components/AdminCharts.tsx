@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui';
+import type { BucketPoint } from '@/services/data';
 import { colors, radius, space } from '@/constants/theme';
 
 /**
@@ -189,4 +190,93 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   swatch: { width: 8, height: 8, borderRadius: 2 },
   empty: { marginTop: space[2] },
+  tsHead: { flexDirection: 'row', alignItems: 'baseline', gap: space[3] },
+  // A fixed plot height: the chart is read as a shape, and a shape that
+  // changes height with the data is not comparable between two views of it.
+  plot: {
+    flexDirection: 'row',
+    // stretch, not flex-end: a column sized by its content has no height for
+    // the bar's percentage to resolve against, so every bar came out zero --
+    // the same collapse a percentage width hits inside a horizontal scroller.
+    alignItems: 'stretch',
+    height: 120,
+    gap: 2,
+    marginTop: space[4],
+  },
+  col: { flex: 1, height: '100%', justifyContent: 'flex-end' },
+  bar: { width: '100%', borderTopLeftRadius: 3, borderTopRightRadius: 3 },
+  axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: space[2] },
+  tsFoot: { marginTop: space[3] },
 });
+
+/**
+ * Signups per bucket, as columns.
+ *
+ * Columns rather than a line: a line between Tuesday and Wednesday draws a
+ * value for the moment in between, and there is no such thing as half a
+ * Tuesday's signups. Bars say "these are counts of separate periods", which is
+ * what they are.
+ *
+ * Only three labels sit under the axis -- first, middle, last. Thirty dates
+ * across a phone would overlap into a grey smear, and the shape is the point;
+ * the exact date of one bar is not.
+ */
+export function TimeSeriesBars({ points }: { points: BucketPoint[] }) {
+  const peak = points.reduce((m, p) => Math.max(m, p.count), 0);
+  const total = points.reduce((n, p) => n + p.count, 0);
+  const latest = points[points.length - 1];
+  const ticks = [0, Math.floor((points.length - 1) / 2), points.length - 1];
+
+  return (
+    <View style={styles.block}>
+      <View style={styles.tsHead}>
+        <Text variant="display">{total}</Text>
+        <Text variant="caption" tone="muted">
+          in this range · peak {peak}
+        </Text>
+      </View>
+
+      <View style={styles.plot}>
+        {points.map((p, i) => (
+          <View key={p.start.getTime()} style={styles.col}>
+            {/* Anchored to the baseline, so height is the only thing carrying
+                the value. A zero bucket keeps a 1px foot rather than vanishing:
+                the gap in the row is the information. */}
+            <View
+              style={[
+                styles.bar,
+                {
+                  height: peak > 0 ? `${Math.max((p.count / peak) * 100, p.count > 0 ? 4 : 0.8)}%` : '0.8%',
+                  backgroundColor: p.count > 0 ? FUNNEL_HUE : colors.muted,
+                  // The most recent bucket is the one being watched, and it is
+                  // usually still filling up.
+                  opacity: i === points.length - 1 ? 0.55 : 1,
+                },
+              ]}
+            />
+          </View>
+        ))}
+      </View>
+
+      {/* Three labels on their own row, spread across the plot. Inside the
+          columns they were clipped to "J…" -- a thirtieth of a phone is not
+          wide enough for a date, and the column width is set by the data. */}
+      <View style={styles.axis}>
+        {ticks.map((t, i) => (
+          <Text
+            key={points[t]?.start.getTime() ?? i}
+            variant="caption"
+            tone="subtle"
+            numberOfLines={1}
+          >
+            {points[t]?.label ?? ''}
+          </Text>
+        ))}
+      </View>
+
+      <Text variant="caption" tone="subtle" style={styles.tsFoot}>
+        Newest on the right{latest ? ` · ${latest.count} so far in the latest one` : ''}
+      </Text>
+    </View>
+  );
+}

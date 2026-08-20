@@ -1038,6 +1038,93 @@ export interface AdminReport {
 
 /** Null when the caller is not an admin, so the screen can 404 rather than
  *  render an error that confirms the page exists. */
+/** How a signup chart is bucketed. */
+export type Bucket = 'day' | 'week' | 'month';
+
+export interface BucketPoint {
+  /** Start of the bucket, local midnight. */
+  start: Date;
+  /** Short axis label -- "12 Aug", "wk 12 Aug", "Aug". */
+  label: string;
+  count: number;
+}
+
+/** How many buckets each granularity shows, and how far back that reaches. */
+export const BUCKET_SPAN: Record<Bucket, number> = { day: 30, week: 12, month: 12 };
+
+/** Local midnight, so "today" means the reader's today rather than UTC's. */
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Monday-based week start, which is what "wk of" means to most people. */
+function startOfWeek(d: Date): Date {
+  const s = startOfDay(d);
+  const dow = (s.getDay() + 6) % 7;
+  s.setDate(s.getDate() - dow);
+  return s;
+}
+
+const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+
+const bucketStart = (d: Date, b: Bucket) =>
+  b === 'day' ? startOfDay(d) : b === 'week' ? startOfWeek(d) : startOfMonth(d);
+
+function stepBack(d: Date, b: Bucket, n: number): Date {
+  const c = new Date(d);
+  if (b === 'day') c.setDate(c.getDate() - n);
+  else if (b === 'week') c.setDate(c.getDate() - n * 7);
+  else c.setMonth(c.getMonth() - n);
+  return c;
+}
+
+function labelFor(d: Date, b: Bucket): string {
+  if (b === 'month') return d.toLocaleDateString(undefined, { month: 'short' });
+  const day = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return b === 'week' ? day : day;
+}
+
+/**
+ * Signups per day, week or month.
+ *
+ * Bucketed here rather than in Postgres because the rows needed are only the
+ * ones inside the window -- a month of signups, not every profile ever -- so
+ * the query is bounded by the range on screen rather than by how big the app
+ * gets. If that stops being true, this is the thing to move into an RPC.
+ *
+ * Empty buckets are filled in. A chart that silently omits the days nobody
+ * signed up is a chart that makes every week look busy.
+ */
+export async function signupsOverTime(bucket: Bucket): Promise<BucketPoint[]> {
+  const span = BUCKET_SPAN[bucket];
+  const now = new Date();
+  const first = bucketStart(stepBack(now, bucket, span - 1), bucket);
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('created_at')
+    .gte('created_at', first.toISOString())
+    .order('created_at', { ascending: true });
+  if (error) await fail(error);
+
+  const counts = new Map<number, number>();
+  for (const row of (data ?? []) as { created_at: string }[]) {
+    const key = bucketStart(new Date(row.created_at), bucket).getTime();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  const points: BucketPoint[] = [];
+  for (let i = span - 1; i >= 0; i -= 1) {
+    const start = bucketStart(stepBack(now, bucket, i), bucket);
+    points.push({
+      start,
+      label: labelFor(start, bucket),
+      count: counts.get(start.getTime()) ?? 0,
+    });
+  }
+  return points;
+}
+
 export async function adminStats(): Promise<AdminStats | null> {
   const { data, error } = await supabase.rpc('admin_stats');
   if (error) return null;
