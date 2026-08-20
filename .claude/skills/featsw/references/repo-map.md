@@ -56,7 +56,8 @@ compared against, not a target that has been met:
 
 | | |
 |---|---|
-| Web bundle | **415 KB** brotli / 1.57 MB raw — every visitor pays this before anything works |
+| Web bundle | **291 KB** brotli / 1383 KB raw — every visitor pays this before anything works |
+| Lazy chunk | jsQR, 127 KB raw, fetched only when someone picks an image |
 | HTML shell | ~8.9 KB |
 | TTFB `/admin` | 0.34 s (static asset, edge HIT) |
 | TTFB `/feed` | 0.61 s |
@@ -65,9 +66,21 @@ compared against, not a target that has been met:
 
 The bundle is the number to watch. It is one file that everyone downloads on a
 phone, and it grows silently: a dependency added for one screen ships to every
-visitor. Check it before and after adding one — `expo export -p web` then look
-at `dist/_expo/static/js/web/`. The Geist subpath import in `app/_layout.tsx`
-exists because importing the package root cost 1.66 MB to use four weights.
+visitor. Check it before and after adding one — `expo export -p web --source-maps`,
+then read the map's `sourcesContent` to see the cost per package. Guessing which
+dependency is heavy does not work; the answer here was jsQR at 250 KB, which
+nobody would have picked.
+
+Two mechanisms already in use, worth reaching for again:
+
+- `await import('x')` inside the function that needs it. Metro emits a separate
+  chunk. This is how jsQR left the entry bundle.
+- A `.web.tsx` stub that renders null. Metro resolves it on web and the native
+  module never enters the graph — how `expo-camera` left. `DateField.web.tsx`
+  is the older example.
+
+The Geist subpath import in `app/_layout.tsx` is the cautionary tale: importing
+the package root cost 1.66 MB to use four weights.
 
 ## Test fixtures
 

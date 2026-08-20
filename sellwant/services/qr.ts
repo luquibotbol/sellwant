@@ -8,7 +8,6 @@
  * and can be tested directly.
  */
 import * as Crypto from 'expo-crypto';
-import jsQR from 'jsqr';
 import { normalisePayload } from '@/services/normalise';
 
 export { normalisePayload, maskCode } from '@/services/normalise';
@@ -25,6 +24,11 @@ export async function hashPayload(raw: string): Promise<string> {
  * Native scans with the camera instead (see QrScannerModal) -- decoding a JPEG
  * to raw pixels on device would mean shipping a decoder for no benefit when a
  * camera is right there.
+ *
+ * jsQR is imported here rather than at the top of the file. It is 250 KB of
+ * the web bundle -- the single largest thing that is not the framework -- and
+ * it is needed only once somebody has actually picked an image. Imported
+ * statically, every visitor downloads a QR decoder to read a listing.
  */
 export async function decodeQrFromImageWeb(uri: string): Promise<string | null> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -43,6 +47,7 @@ export async function decodeQrFromImageWeb(uri: string): Promise<string | null> 
   ctx.drawImage(image, 0, 0);
   const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+  const { default: jsQR } = await import('jsqr');
   const result = jsQR(data, width, height, { inversionAttempts: 'attemptBoth' });
   return result?.data ?? null;
 }
