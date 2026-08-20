@@ -4,7 +4,7 @@ import Head from 'expo-router/head';
 import { Text, Card, Badge, Button, Separator, EmptyState, SegmentedFilter } from '@/components/ui';
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { money, relativeTime } from '@/lib/format';
-import { FunnelChart, CompositionBar, TimeSeriesBars } from '@/components/AdminCharts';
+import { FunnelChart, CompositionBar, TimeSeriesLine } from '@/components/AdminCharts';
 import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
 import {
@@ -128,7 +128,7 @@ export default function AdminScreen() {
             {signups.error.message}
           </Text>
         ) : signups.data ? (
-          <TimeSeriesBars points={signups.data} />
+          <TimeSeriesLine points={signups.data} />
         ) : (
           // Keeps the card's height while the next granularity loads, so
           // switching Daily/Weekly does not make the page jump.

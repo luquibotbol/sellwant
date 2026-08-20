@@ -114,6 +114,21 @@ rendered it, so photos round-tripped safely and could not be changed. It
 typechecks, because an unused import and an unread state variable are both
 legal. Open every screen a shared component was added to, not just the first.
 
+**Don't measure react-native-web output with computed-style selectors.** They
+have now reported `object-fit: fill` on an image rendering `contain`, a 0-width
+frame on a photo that was plainly visible, and zero line segments on a chart
+that was drawn on screen. RNW nests, duplicates and hides elements in ways that
+defeat a `querySelectorAll(...).find()`. Screenshot first and treat the picture
+as ground truth; use the DOM only to confirm a number the picture already
+suggests.
+
+**A percentage resolves against the parent's own size — on both axes.** A
+percentage *width* inside a horizontal `ScrollView` collapses because the
+content box is sized by its content; a percentage *height* inside a
+content-sized column collapses for the same reason, and a bar chart drew
+nothing while the totals above it were right. Give the parent a definite size,
+or compute pixels from a measured one.
+
 **A percentage width inside a horizontal `ScrollView` collapses to zero.** The
 content box is sized by its content, so `width: '100%'` has nothing to resolve
 against. A listing's single photo loaded, decoded, and drew a 0x200 box.

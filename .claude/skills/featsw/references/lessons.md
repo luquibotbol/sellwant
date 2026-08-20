@@ -202,3 +202,16 @@ measurement, and deleted the `Image.getSize` machinery it replaced.
 **Signal:** "show the whole image" and "make them all look the same" sound like
 the same request and are not. Ask which one is wanted before reaching for
 measurement.
+
+---
+
+### 2026-08-20 — Three DOM probes lied; the screenshot was right every time
+
+Verifying charts and photos, computed-style selectors reported `object-fit:
+fill` on an image rendering `contain`, a 0-width frame on a visible photo, and
+zero segments on a line that was on screen. Each time the screenshot showed the
+truth, and each time a few minutes went into chasing a bug that did not exist.
+
+**Signal:** on react-native-web, look before measuring. The DOM is for
+confirming a number the picture already implies, not for deciding whether
+something rendered.

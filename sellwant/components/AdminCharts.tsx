@@ -41,9 +41,6 @@ function share(n: number, of: number): string {
   return p < 1 ? '<1%' : `${Math.round(p)}%`;
 }
 
-/** Whole percent, for the funnel's stage-to-stage drop. */
-const pct = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 100) : 0);
-
 interface FunnelStage {
   label: string;
   value: number;
@@ -62,7 +59,6 @@ export function FunnelChart({ stages }: { stages: FunnelStage[] }) {
   return (
     <View style={styles.block}>
       {stages.map((s, i) => {
-        const previous = i === 0 ? null : stages[i - 1].value;
         const fraction = top > 0 ? s.value / top : 0;
         return (
           <View key={s.label} style={styles.row}>
@@ -70,15 +66,10 @@ export function FunnelChart({ stages }: { stages: FunnelStage[] }) {
               <Text variant="small" tone="muted">
                 {s.label}
               </Text>
-              <Text variant="small">
-                {s.value}
-                {previous !== null && (
-                  <Text variant="caption" tone="subtle">
-                    {'  '}
-                    {pct(s.value, previous)}% of previous
-                  </Text>
-                )}
-              </Text>
+              {/* The count, and nothing else. A percentage of the previous
+                  stage answers a different question than the one being asked
+                  here, which is how many people reached this point. */}
+              <Text variant="small">{s.value}</Text>
             </View>
             {/* The track makes an empty stage legible as zero rather than as a
                 missing row. */}
@@ -193,39 +184,59 @@ const styles = StyleSheet.create({
   tsHead: { flexDirection: 'row', alignItems: 'baseline', gap: space[3] },
   // A fixed plot height: the chart is read as a shape, and a shape that
   // changes height with the data is not comparable between two views of it.
-  plot: {
-    flexDirection: 'row',
-    // stretch, not flex-end: a column sized by its content has no height for
-    // the bar's percentage to resolve against, so every bar came out zero --
-    // the same collapse a percentage width hits inside a horizontal scroller.
-    alignItems: 'stretch',
-    height: 120,
-    gap: 2,
-    marginTop: space[4],
+  plot: { position: 'relative', marginTop: space[4] },
+  baseline: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 1,
+    backgroundColor: colors.border,
   },
-  col: { flex: 1, height: '100%', justifyContent: 'flex-end' },
-  bar: { width: '100%', borderTopLeftRadius: 3, borderTopRightRadius: 3 },
+  // 2px, per the mark spec: a line is a measurement, not a stroke of paint.
+  segment: { position: 'absolute', height: 2, backgroundColor: FUNNEL_HUE, borderRadius: 1 },
+  dot: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: FUNNEL_HUE,
+    // A ring of surface so a marker sitting on the line still reads as a point.
+    borderWidth: 2,
+    borderColor: colors.card,
+  },
   axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: space[2] },
   tsFoot: { marginTop: space[3] },
 });
 
 /**
- * Signups per bucket, as columns.
+ * Signups over time, as a line.
  *
- * Columns rather than a line: a line between Tuesday and Wednesday draws a
- * value for the moment in between, and there is no such thing as half a
- * Tuesday's signups. Bars say "these are counts of separate periods", which is
- * what they are.
+ * Drawn from rotated Views: one absolutely-positioned segment per gap, each
+ * rotated to the angle between its two points. There is no SVG library here,
+ * and adding one to draw a polyline would be a dependency for a single screen.
  *
- * Only three labels sit under the axis -- first, middle, last. Thirty dates
- * across a phone would overlap into a grey smear, and the shape is the point;
- * the exact date of one bar is not.
+ * Positions are computed in pixels from a measured width rather than in
+ * percentages. A percentage resolves against the parent's own size, and this
+ * chart has already been bitten twice by that -- a percentage width inside a
+ * horizontal scroller and a percentage height inside a content-sized column
+ * both collapsed to zero. Measuring removes the question.
  */
-export function TimeSeriesBars({ points }: { points: BucketPoint[] }) {
+export function TimeSeriesLine({ points }: { points: BucketPoint[] }) {
+  const [width, setWidth] = React.useState(0);
+
   const peak = points.reduce((m, p) => Math.max(m, p.count), 0);
   const total = points.reduce((n, p) => n + p.count, 0);
   const latest = points[points.length - 1];
   const ticks = [0, Math.floor((points.length - 1) / 2), points.length - 1];
+
+  const H = 120;
+  const step = points.length > 1 ? width / (points.length - 1) : 0;
+  // A flat zero line sits on the floor rather than halfway up an invented axis.
+  const y = (n: number) => (peak > 0 ? H - (n / peak) * H : H);
+  const xy = points.map((p, i) => ({ x: i * step, y: y(p.count) }));
+
+  const peakIndex = points.reduce((best, p, i) => (p.count > points[best].count ? i : best), 0);
 
   return (
     <View style={styles.block}>
@@ -236,31 +247,50 @@ export function TimeSeriesBars({ points }: { points: BucketPoint[] }) {
         </Text>
       </View>
 
-      <View style={styles.plot}>
-        {points.map((p, i) => (
-          <View key={p.start.getTime()} style={styles.col}>
-            {/* Anchored to the baseline, so height is the only thing carrying
-                the value. A zero bucket keeps a 1px foot rather than vanishing:
-                the gap in the row is the information. */}
+      <View
+        style={[styles.plot, { height: H }]}
+        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      >
+        {/* Baseline, so a run of zeroes reads as zero rather than as no data. */}
+        <View style={styles.baseline} />
+
+        {width > 0 &&
+          xy.slice(0, -1).map((a, i) => {
+            const b = xy[i + 1];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+            return (
+              <View
+                key={points[i].start.getTime()}
+                style={[
+                  styles.segment,
+                  {
+                    left: a.x,
+                    top: a.y,
+                    width: len,
+                    // Rotate about the left edge so the segment starts exactly
+                    // on its point instead of centred on it.
+                    transform: [{ translateY: -1 }, { rotateZ: `${angle}deg` }],
+                    transformOrigin: 'left center',
+                  },
+                ]}
+              />
+            );
+          })}
+
+        {/* Markers only where they say something: the busiest bucket and the
+            one still filling. A dot on all thirty is a dotted line. */}
+        {width > 0 &&
+          [peakIndex, points.length - 1].map((i) => (
             <View
-              style={[
-                styles.bar,
-                {
-                  height: peak > 0 ? `${Math.max((p.count / peak) * 100, p.count > 0 ? 4 : 0.8)}%` : '0.8%',
-                  backgroundColor: p.count > 0 ? FUNNEL_HUE : colors.muted,
-                  // The most recent bucket is the one being watched, and it is
-                  // usually still filling up.
-                  opacity: i === points.length - 1 ? 0.55 : 1,
-                },
-              ]}
+              key={`dot-${points[i].start.getTime()}`}
+              style={[styles.dot, { left: xy[i].x - 4, top: xy[i].y - 4 }]}
             />
-          </View>
-        ))}
+          ))}
       </View>
 
-      {/* Three labels on their own row, spread across the plot. Inside the
-          columns they were clipped to "J…" -- a thirtieth of a phone is not
-          wide enough for a date, and the column width is set by the data. */}
       <View style={styles.axis}>
         {ticks.map((t, i) => (
           <Text
