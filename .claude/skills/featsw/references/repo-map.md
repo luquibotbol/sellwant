@@ -49,6 +49,26 @@ cd sellwant && bun run test              # full suite, hits production
 Browser verification uses the preview tools with the launch config named
 `sellwant-web` (port 8081). Never start a dev server with Bash.
 
+## Performance baseline
+
+Measured on production, 2026-08-20. These are the numbers a change should be
+compared against, not a target that has been met:
+
+| | |
+|---|---|
+| Web bundle | **415 KB** brotli / 1.57 MB raw — every visitor pays this before anything works |
+| HTML shell | ~8.9 KB |
+| TTFB `/admin` | 0.34 s (static asset, edge HIT) |
+| TTFB `/feed` | 0.61 s |
+| TTFB `/` | 0.93 s — the worker reads listings to inject the feed's markup |
+| Static assets | `cache-control: immutable`, 1 year, `cf-cache-status: HIT` |
+
+The bundle is the number to watch. It is one file that everyone downloads on a
+phone, and it grows silently: a dependency added for one screen ships to every
+visitor. Check it before and after adding one — `expo export -p web` then look
+at `dist/_expo/static/js/web/`. The Geist subpath import in `app/_layout.tsx`
+exists because importing the package root cost 1.66 MB to use four weights.
+
 ## Test fixtures
 
 Two confirmed accounts, both `@example.edu`, password in `SELLWANT_TEST_PASSWORD`

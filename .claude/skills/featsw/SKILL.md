@@ -53,6 +53,14 @@ repeatedly replaced a day of building.
   *every* column, including the going rate on their own listing.
 - **Prefer the smaller shape.** One button that always works beats two buttons
   where one is usually wrong.
+- **Budget what it costs before building it.** Speed is a requirement here, not
+  a later pass: the people using this are students on phones, arriving from a
+  link in a group chat, and a slow first paint is the whole experience because
+  there is nothing to fall back on. Ask what the change adds per navigation,
+  per render and per byte. Bound every query. A fetch inside a component that
+  renders on every screen pays on every screen. A dependency added for one
+  feature ships to everyone. If a change makes something slower, say so with a
+  number rather than shipping it quietly.
 
 Report what you found before building. If the ask rests on a wrong premise,
 say so in a sentence or two, then build the version that makes sense.
