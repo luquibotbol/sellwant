@@ -143,3 +143,62 @@ browsing twenty listings cost forty requests to learn nothing had changed.
 **Signal:** anything living in a component rendered on every screen pays its
 cost on every navigation. Ask which screens can actually change the value, and
 key on leaving those.
+
+---
+
+### 2026-08-19 — The fix for the cropped photo looked identical to no fix at all
+
+A listing's single photo was cropped to a fixed 200px band. Sizing the box
+from the image's own `onLoad` typechecked, ran, and rendered a page that
+looked reasonable — but react-native-web does not populate
+`nativeEvent.source`, so the ratio stayed null and every photo kept the
+placeholder shape. The screenshot afterwards looks like a working fix; it is
+only wrong if you know what the photo's real proportions are.
+
+**Signal:** for a layout fix, assert the number rather than looking at it.
+Comparing the computed `aspect-ratio` (`1.33333 / 1`) against the image's
+natural size (555×900) settled it instantly, and would have caught it before
+the first screenshot rather than after.
+
+---
+
+### 2026-08-19 — Bounding the bytes is not bounding the layout
+
+The storage rules for listing photos cap count, file size and mime type, so
+they read as though the field is fully constrained. Nothing caps *dimensions*:
+a 1200×6000 screenshot is a legal 5MB upload, and once the box takes the
+image's own ratio that is 1675px of photo at phone width, burying the seller
+card and the whole offer board.
+
+**Signal:** when a change makes layout depend on user data that was previously
+ignored, ask what the most extreme legal value does to the page. The upload
+limits had been reviewed; they just answered a different question.
+
+---
+
+### 2026-08-20 — The photo feature was half-wired for a day and nobody could tell
+
+`PhotoField` was added to the create form and the edit screen in the same
+change. Only the create form actually rendered it. The edit screen imported it,
+kept its state, loaded `image_urls` into that state and wrote the same value
+back on save — so nothing broke, nothing was lost, and the feature was simply
+absent from half the places it was supposed to be. Found by opening the screen
+while building something else entirely.
+
+**Signal:** when one component is wired into two screens, open both. The
+compiler cannot tell you a component is missing from a render, and a
+round-trip that preserves data hides the gap completely.
+
+---
+
+### 2026-08-20 — Uniform framing beat per-image measurement
+
+The first fix for a cropped photo measured each image and set the height from
+its own aspect ratio, which shows the whole picture but makes every listing a
+different height. The ask turned out to be the opposite: same frame everywhere,
+whole picture inside it. `contain` in a fixed 4:3 box does both, needs no
+measurement, and deleted the `Image.getSize` machinery it replaced.
+
+**Signal:** "show the whole image" and "make them all look the same" sound like
+the same request and are not. Ask which one is wanted before reaching for
+measurement.

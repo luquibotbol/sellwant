@@ -94,6 +94,26 @@ and told crawlers one listing was an unbounded number of near-duplicate pages.
 rendering correctly against a broken URL is indistinguishable from one that
 never rendered. Measure the element box before doubting the code.
 
+**React Native Web's `Image` does not populate `onLoad`'s
+`nativeEvent.source`.** Sizing a box from the dimensions it reports leaves the
+value null forever, and the fallback renders something plausible — so the
+broken version and the working one look the same on screen. Use
+`Image.getSize`, and assert the computed ratio against the image's natural
+size rather than eyeballing the result.
+
+**RNW's `Image` paints a background-image div, not the `<img>`.** The `<img>`
+it renders is `opacity: 0` and exists for accessibility, so reading
+`object-fit` or the box off it tells you nothing — one reported `fill` on a
+photo that was plainly rendering `contain`. Measure `background-size` and
+`background-image` on the painted div instead.
+
+**Wiring state and the save payload without rendering the field ships a
+feature that silently does nothing.** The edit screen imported `PhotoField`,
+held its state, loaded the listing's photos and saved them back — and never
+rendered it, so photos round-tripped safely and could not be changed. It
+typechecks, because an unused import and an unread state variable are both
+legal. Open every screen a shared component was added to, not just the first.
+
 **A percentage width inside a horizontal `ScrollView` collapses to zero.** The
 content box is sized by its content, so `width: '100%'` has nothing to resolve
 against. A listing's single photo loaded, decoded, and drew a 0x200 box.

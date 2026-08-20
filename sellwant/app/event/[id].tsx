@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Text, Card, Badge, Avatar, Button, Separator, ErrorState, EmptyState } from '@/components/ui';
 import OfferBoard from '@/components/OfferBoard';
+import PhotoCarousel from '@/components/PhotoCarousel';
 import { colors, space, radius, maxContentWidth } from '@/constants/theme';
 import { money } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
@@ -25,7 +26,6 @@ export default function ListingDetailScreen() {
   const [arming, setArming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ownerError, setOwnerError] = useState<string | null>(null);
-
   // Returns null unless a lock-in already exists between us, so this doubles
   // as the check for whether the deal is live.
   //
@@ -145,42 +145,10 @@ export default function ListingDetailScreen() {
         )}
       </Card>
 
-      {/* Photos, when there are any. Above the poster card because a picture
-          of the venue answers "is this the thing I want" before "who is
-          selling it" -- and below the price, which is what people came for. */}
-      {/* Photos, when there are any. Above the poster card because a picture
-          of the venue answers "is this the thing I want" before "who is
-          selling it" -- and below the price, which is what people came for.
-
-          One photo is rendered on its own rather than in the scroller: a
-          percentage width inside a horizontal ScrollView resolves against a
-          content box that is itself sized by its content, so `width: 100%`
-          collapsed to zero and the image loaded, decoded, and drew nothing. */}
-      {l.image_urls?.length === 1 ? (
-        <Image
-          source={{ uri: l.image_urls[0] }}
-          style={styles.photoSingle}
-          resizeMode="cover"
-          accessibilityLabel="Listing photo"
-        />
-      ) : !!l.image_urls?.length ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.gallery}
-          contentContainerStyle={styles.galleryInner}
-        >
-          {l.image_urls.map((url) => (
-            <Image
-              key={url}
-              source={{ uri: url }}
-              style={styles.photo}
-              resizeMode="cover"
-              accessibilityLabel="Listing photo"
-            />
-          ))}
-        </ScrollView>
-      ) : null}
+      {/* Above the poster card because a picture of the thing answers "is this
+          what I want" before "who is selling it", and below the price, which
+          is what people came for. */}
+      <PhotoCarousel urls={l.image_urls ?? []} />
 
       {anon && (
         <Card style={styles.poster} onPress={() => router.navigate(signInHere as never)}>
@@ -375,17 +343,6 @@ const styles = StyleSheet.create({
   action: { marginTop: space[6] },
   actionNote: { marginTop: space[3], textAlign: 'center' },
   mine: { marginTop: space[6], textAlign: 'center' },
-  gallery: { marginTop: space[5], flexGrow: 0 },
-  galleryInner: { gap: space[3] },
-  photo: { width: 220, height: 150, borderRadius: radius.lg, backgroundColor: colors.muted },
-  // Full width, and outside the horizontal scroller -- see the render.
-  photoSingle: {
-    width: '100%',
-    height: 200,
-    marginTop: space[5],
-    borderRadius: radius.lg,
-    backgroundColor: colors.muted,
-  },
   ownerRow: { flexDirection: 'row', gap: space[3] },
   ownerButton: { flex: 1 },
   ownerDelete: { marginTop: space[3], alignSelf: 'center' },
