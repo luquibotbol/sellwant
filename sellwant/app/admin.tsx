@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import Head from 'expo-router/head';
-import { Text, Card, Badge, Button, Separator, EmptyState } from '@/components/ui';
+import { Text, Card, Badge, Button, Separator, EmptyState, SegmentedFilter } from '@/components/ui';
 import { colors, space, maxContentWidth } from '@/constants/theme';
 import { money, relativeTime } from '@/lib/format';
+import { FunnelChart, CompositionBar, TimeSeriesLine } from '@/components/AdminCharts';
 import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
 import {
   adminStats,
+  signupsOverTime,
+  Bucket,
   adminReports,
   adminReviewReport,
   adminSetSuspended,
@@ -16,7 +19,6 @@ import {
 
 /** A percentage of the previous funnel step, which is the number that shows
  *  where people give up. */
-const pct = (n: number, of: number) => (of === 0 ? '—' : `${Math.round((n / of) * 100)}%`);
 
 function Stat({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -45,6 +47,8 @@ function Stat({ label, value, sub }: { label: string; value: string | number; su
 export default function AdminScreen() {
   const session = useSession();
   const stats = useAsync(adminStats, []);
+  const [bucket, setBucket] = useState<Bucket>('day');
+  const signups = useAsync(() => signupsOverTime(bucket), [bucket]);
   const [showReviewed, setShowReviewed] = useState(false);
   const reports = useAsync(() => adminReports(showReviewed), [showReviewed]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -105,36 +109,50 @@ export default function AdminScreen() {
         <Stat label="active this week" value={s.users.active_7d} sub={`${s.users.via_google} via Google`} />
       </Card>
 
+      {/* Signups over time ------------------------------------------- */}
+      <Text variant="heading" style={styles.section}>
+        New accounts
+      </Text>
+      <Card style={styles.chartCard}>
+        <SegmentedFilter
+          options={[
+            { value: 'day' as Bucket, label: 'Daily' },
+            { value: 'week' as Bucket, label: 'Weekly' },
+            { value: 'month' as Bucket, label: 'Monthly' },
+          ]}
+          value={bucket}
+          onChange={setBucket}
+        />
+        {signups.error ? (
+          <Text variant="small" tone="destructive" style={styles.chartNote}>
+            {signups.error.message}
+          </Text>
+        ) : signups.data ? (
+          <TimeSeriesLine points={signups.data} />
+        ) : (
+          // Keeps the card's height while the next granularity loads, so
+          // switching Daily/Weekly does not make the page jump.
+          <View style={styles.chartLoading}>
+            <ActivityIndicator color={colors.mutedForeground} />
+          </View>
+        )}
+      </Card>
+
       {/* Funnel — the most useful thing on the page -------------------- */}
       <Text variant="heading" style={styles.section}>
         Where people stop
       </Text>
       <Card>
-        {[
-          { label: 'Signed up', n: f.signed_up, of: f.signed_up },
-          { label: 'Finished onboarding', n: f.onboarded, of: f.signed_up },
-          { label: 'Posted a listing', n: f.posted, of: f.onboarded },
-          { label: 'Made an offer', n: f.offered, of: f.onboarded },
-          { label: 'Agreed a deal', n: f.in_a_deal, of: f.onboarded },
-          { label: 'Completed a handoff', n: f.confirmed, of: f.in_a_deal },
-        ].map((step, i) => (
-          <View key={step.label}>
-            {i > 0 && <Separator style={styles.divider} />}
-            <View style={styles.funnelRow}>
-              <Text variant="small" tone="muted">
-                {step.label}
-              </Text>
-              <View style={styles.funnelRight}>
-                <Text variant="bodyMedium">{step.n}</Text>
-                {i > 0 && (
-                  <Text variant="caption" tone="subtle">
-                    {pct(step.n, step.of)} of previous
-                  </Text>
-                )}
-              </View>
-            </View>
-          </View>
-        ))}
+        <FunnelChart
+          stages={[
+            { label: 'Signed up', value: f.signed_up },
+            { label: 'Finished onboarding', value: f.onboarded },
+            { label: 'Posted a listing', value: f.posted },
+            { label: 'Made an offer', value: f.offered },
+            { label: 'Agreed a deal', value: f.in_a_deal },
+            { label: 'Completed a handoff', value: f.confirmed },
+          ]}
+        />
       </Card>
 
       {/* Market -------------------------------------------------------- */}
@@ -164,6 +182,52 @@ export default function AdminScreen() {
         {/* Not revenue. Money never moves through SellWant; this is the size
             of the market being cleared. */}
         <Stat label="value cleared" value={money(s.deals.value_confirmed_cents)} sub="not revenue" />
+      </Card>
+
+      {/* Three compositions, because each of these is a set of mutually
+          exclusive outcomes that adds up to its total. The people numbers
+          above stay as figures: confirmed, via-Google and active-this-week
+          overlap, so stacking them would draw a bar longer than the number of
+          people who exist. */}
+      <Card style={styles.chartCard}>
+        <Text variant="small" tone="muted">
+          Listings by state
+        </Text>
+        <CompositionBar
+          parts={[
+            { label: 'Live', value: s.listings.active },
+            { label: 'In a deal', value: s.listings.locked },
+            { label: 'Sold', value: s.listings.sold },
+            { label: 'Taken down', value: s.listings.cancelled },
+          ]}
+        />
+      </Card>
+
+      <Card style={styles.chartCard}>
+        <Text variant="small" tone="muted">
+          What happens to an offer
+        </Text>
+        <CompositionBar
+          parts={[
+            { label: 'Open', value: s.offers.open },
+            { label: 'Accepted', value: s.offers.accepted },
+            { label: 'Declined', value: s.offers.declined },
+            { label: 'Withdrawn', value: s.offers.withdrawn },
+          ]}
+        />
+      </Card>
+
+      <Card style={styles.chartCard}>
+        <Text variant="small" tone="muted">
+          What happens to a deal
+        </Text>
+        <CompositionBar
+          parts={[
+            { label: 'In progress', value: s.deals.in_progress },
+            { label: 'Completed', value: s.deals.confirmed },
+            { label: 'Cancelled', value: s.deals.cancelled },
+          ]}
+        />
       </Card>
 
       {/* Trust and safety ---------------------------------------------- */}
@@ -263,20 +327,15 @@ const styles = StyleSheet.create({
   },
   centered: { alignItems: 'center', justifyContent: 'center' },
   sectionFirst: { marginTop: space[5], marginBottom: space[3] },
+  chartCard: { marginTop: space[3] },
+  chartNote: { marginTop: space[4] },
+  chartLoading: { height: 176, alignItems: 'center', justifyContent: 'center' },
   section: { marginTop: space[8], marginBottom: space[3] },
   statRow: { flexDirection: 'row', alignItems: 'center' },
   statRowStacked: { flexDirection: 'row', alignItems: 'center', marginTop: space[3] },
   stat: { flex: 1, alignItems: 'center', gap: space[1] },
   statSub: { textAlign: 'center' },
   vline: { width: 1, height: 44, backgroundColor: colors.border },
-  divider: { marginHorizontal: -space[4] },
-  funnelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: space[3],
-  },
-  funnelRight: { alignItems: 'flex-end' },
   reportsHead: {
     flexDirection: 'row',
     alignItems: 'baseline',
