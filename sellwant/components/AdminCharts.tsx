@@ -206,6 +206,29 @@ const styles = StyleSheet.create({
     borderColor: colors.card,
   },
   axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: space[2] },
+  crosshair: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: colors.borderStrong,
+  },
+  hoverDot: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.foreground,
+    borderWidth: 2,
+    borderColor: colors.card,
+  },
+  readout: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: space[2],
+    marginTop: space[3],
+  },
   tsFoot: { marginTop: space[3] },
 });
 
@@ -224,6 +247,14 @@ const styles = StyleSheet.create({
  */
 export function TimeSeriesLine({ points }: { points: BucketPoint[] }) {
   const [width, setWidth] = React.useState(0);
+  /** Index under the pointer, or null when it is elsewhere. */
+  const [hover, setHover] = React.useState<number | null>(null);
+
+  // Switching Daily to Monthly swaps thirty points for twelve while the
+  // pointer sits still, and an index kept from the old array then reads off
+  // the end of the new one. Nothing moves the pointer to correct it, so the
+  // series itself has to clear it.
+  React.useEffect(() => setHover(null), [points]);
 
   const peak = points.reduce((m, p) => Math.max(m, p.count), 0);
   const total = points.reduce((n, p) => n + p.count, 0);
@@ -289,6 +320,57 @@ export function TimeSeriesLine({ points }: { points: BucketPoint[] }) {
               style={[styles.dot, { left: xy[i].x - 4, top: xy[i].y - 4 }]}
             />
           ))}
+
+        {/* Crosshair for whichever bucket the pointer is nearest. Snapped to a
+            point rather than following the cursor freely: the value belongs to
+            a day, not to the pixel between two days. */}
+        {hover !== null && xy[hover] && width > 0 && (
+          <>
+            <View style={[styles.crosshair, { left: xy[hover].x }]} />
+            <View
+              style={[styles.hoverDot, { left: xy[hover].x - 5, top: xy[hover].y - 5 }]}
+            />
+          </>
+        )}
+
+        {/* One transparent layer over the whole plot, so the target is the
+            chart rather than a 2px line. Pointer events only -- on a touch
+            screen there is no hover, and the numbers are in the caption. */}
+        {width > 0 && (
+          <View
+            style={StyleSheet.absoluteFill}
+            onPointerMove={(e) => {
+              // offsetX, not locationX: pointer events are not touch events,
+              // and offsetX is already relative to this layer.
+              const x = e.nativeEvent.offsetX;
+              const i = step > 0 ? Math.round(x / step) : 0;
+              setHover(Math.max(0, Math.min(i, points.length - 1)));
+            }}
+            onPointerLeave={() => setHover(null)}
+          />
+        )}
+      </View>
+
+      {/* Reserved space, so the card does not grow and shove the page down the
+          moment a pointer crosses it. */}
+      <View style={styles.readout}>
+        {hover !== null && points[hover] ? (
+          <>
+            <Text variant="small">
+              {points[hover].count}
+              <Text variant="caption" tone="muted">
+                {points[hover].count === 1 ? ' signup' : ' signups'}
+              </Text>
+            </Text>
+            <Text variant="caption" tone="subtle">
+              {points[hover].full}
+            </Text>
+          </>
+        ) : (
+          <Text variant="caption" tone="subtle">
+            Hover the chart for a single period
+          </Text>
+        )}
       </View>
 
       <View style={styles.axis}>

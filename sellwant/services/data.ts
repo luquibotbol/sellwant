@@ -1044,8 +1044,10 @@ export type Bucket = 'day' | 'week' | 'month';
 export interface BucketPoint {
   /** Start of the bucket, local midnight. */
   start: Date;
-  /** Short axis label -- "12 Aug", "wk 12 Aug", "Aug". */
+  /** Short axis label -- "12 Aug", "Aug". */
   label: string;
+  /** Full label for the tooltip, where there is room to say which period. */
+  full: string;
   count: number;
 }
 
@@ -1080,8 +1082,22 @@ function stepBack(d: Date, b: Bucket, n: number): Date {
 
 function labelFor(d: Date, b: Bucket): string {
   if (b === 'month') return d.toLocaleDateString(undefined, { month: 'short' });
-  const day = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-  return b === 'week' ? day : day;
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+/**
+ * The tooltip's label. Says which period, because "17 Aug" on a weekly chart
+ * is a week and there is nothing on screen to tell you that.
+ */
+function fullLabelFor(d: Date, b: Bucket): string {
+  if (b === 'month') return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  if (b === 'week') {
+    const end = new Date(d);
+    end.setDate(end.getDate() + 6);
+    const opts = { day: 'numeric', month: 'short' } as const;
+    return `${d.toLocaleDateString(undefined, opts)} – ${end.toLocaleDateString(undefined, opts)}`;
+  }
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
 /**
@@ -1119,6 +1135,7 @@ export async function signupsOverTime(bucket: Bucket): Promise<BucketPoint[]> {
     points.push({
       start,
       label: labelFor(start, bucket),
+      full: fullLabelFor(start, bucket),
       count: counts.get(start.getTime()) ?? 0,
     });
   }
