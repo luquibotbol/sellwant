@@ -1154,6 +1154,34 @@ export async function adminViewStats(days = 30): Promise<ViewStats | null> {
   return (data as ViewStats) ?? null;
 }
 
+export interface PageViewRow {
+  id: number;
+  path: string;
+  listing_id: string | null;
+  created_at: string;
+  listing: { title: string } | null;
+}
+
+/**
+ * The raw rows behind the traffic charts.
+ *
+ * Bounded hard, and ordered newest first: this is for glancing at what is
+ * happening right now, not for exporting. Anything that wants the whole table
+ * is a question for the aggregate, not for a list on a phone.
+ */
+export async function adminRecentViews(limit = 50): Promise<PageViewRow[]> {
+  const { data, error } = await supabase
+    .from('page_views')
+    .select('id, path, listing_id, created_at, listing:listings(title)')
+    .order('created_at', { ascending: false })
+    .limit(Math.min(limit, 100));
+  // RLS returns nothing to a non-admin rather than failing, so an empty list
+  // here means either no traffic yet or not an admin -- the screen is already
+  // behind an admin check, so it can only be the first.
+  if (error) return [];
+  return (data ?? []) as unknown as PageViewRow[];
+}
+
 export async function adminStats(): Promise<AdminStats | null> {
   const { data, error } = await supabase.rpc('admin_stats');
   if (error) return null;
