@@ -11,6 +11,7 @@ import {
   adminStats,
   adminViewStats,
   adminRecentViews,
+  RECENT_VIEW_WINDOW,
   signupsOverTime,
   Bucket,
   adminReports,
@@ -58,7 +59,7 @@ export default function AdminScreen() {
   // Only fetched when the tab is open: nobody reading the funnel needs fifty
   // rows of page views loaded behind it.
   const recent = useAsync(
-    () => (tab === 'impressions' ? adminRecentViews(50) : Promise.resolve([])),
+    () => (tab === 'impressions' ? adminRecentViews() : Promise.resolve([])),
     [tab]
   );
   const signups = useAsync(() => signupsOverTime(bucket), [bucket]);
@@ -411,6 +412,9 @@ export default function AdminScreen() {
           <Text variant="heading" style={styles.section}>
             Últimas vistas
           </Text>
+          <Text variant="caption" tone="subtle">
+            Agrupadas por ruta, sobre las últimas {RECENT_VIEW_WINDOW} vistas.
+          </Text>
           <Card style={styles.chartCard}>
             {recent.loading && !recent.data ? (
               <ActivityIndicator color={colors.mutedForeground} />
@@ -420,22 +424,27 @@ export default function AdminScreen() {
               </Text>
             ) : (
               recent.data.map((v, i) => (
-                <View key={v.id}>
+                <View key={v.path}>
                   {i > 0 && <Separator style={styles.rowLine} />}
                   <View style={styles.viewRow}>
                     <View style={styles.viewMain}>
                       <Text variant="small" numberOfLines={1}>
-                        {v.listing?.title ?? v.path}
+                        {v.title ?? v.path}
                       </Text>
-                      {!!v.listing && (
+                      {!!v.title && (
                         <Text variant="caption" tone="subtle" numberOfLines={1}>
                           {v.path}
                         </Text>
                       )}
                     </View>
-                    <Text variant="caption" tone="subtle">
-                      {relativeTime(v.created_at)}
-                    </Text>
+                    {/* El conteo primero: es la razón por la que la fila está
+                        arriba. La hora es contexto, no el dato. */}
+                    <View style={styles.viewCount}>
+                      <Text variant="small">{v.views}</Text>
+                      <Text variant="caption" tone="subtle">
+                        {relativeTime(v.last)}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               ))
@@ -470,6 +479,7 @@ const styles = StyleSheet.create({
     paddingVertical: space[3],
   },
   viewMain: { flex: 1 },
+  viewCount: { alignItems: 'flex-end' },
   chartNote: { marginTop: space[4] },
   chartLoading: { height: 176, alignItems: 'center', justifyContent: 'center' },
   section: { marginTop: space[8], marginBottom: space[3] },

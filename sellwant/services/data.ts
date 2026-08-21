@@ -1154,32 +1154,64 @@ export async function adminViewStats(days = 30): Promise<ViewStats | null> {
   return (data as ViewStats) ?? null;
 }
 
-export interface PageViewRow {
-  id: number;
+export interface ViewedPath {
   path: string;
-  listing_id: string | null;
-  created_at: string;
-  listing: { title: string } | null;
+  title: string | null;
+  views: number;
+  last: string;
 }
 
+/** How many rows the recent panel reads before grouping them. */
+export const RECENT_VIEW_WINDOW = 200;
+
 /**
- * The raw rows behind the traffic charts.
+ * Recent traffic, one row per path.
  *
- * Bounded hard, and ordered newest first: this is for glancing at what is
- * happening right now, not for exporting. Anything that wants the whole table
- * is a question for the aggregate, not for a list on a phone.
+ * Grouped because the ungrouped version is unreadable: a visit id is per tab
+ * and is regenerated on reload, so three visits to the feed are three honest
+ * rows, and a raw list of the last fifty is mostly the same four paths over
+ * and over.
+ *
+ * Grouped here rather than in Postgres to avoid another migration for a panel
+ * that reads a bounded window anyway. The window is part of the answer, not an
+ * implementation detail -- the screen says how many views the counts are drawn
+ * from, because "12" means nothing without it.
  */
-export async function adminRecentViews(limit = 50): Promise<PageViewRow[]> {
+export async function adminRecentViews(): Promise<ViewedPath[]> {
   const { data, error } = await supabase
     .from('page_views')
-    .select('id, path, listing_id, created_at, listing:listings(title)')
+    .select('path, created_at, listing:listings(title)')
     .order('created_at', { ascending: false })
-    .limit(Math.min(limit, 100));
-  // RLS returns nothing to a non-admin rather than failing, so an empty list
-  // here means either no traffic yet or not an admin -- the screen is already
-  // behind an admin check, so it can only be the first.
+    .limit(RECENT_VIEW_WINDOW);
+  // RLS returns nothing to a non-admin rather than failing; this screen is
+  // already behind an admin check, so empty here means no traffic yet.
   if (error) return [];
-  return (data ?? []) as unknown as PageViewRow[];
+
+  const rows = (data ?? []) as unknown as {
+    path: string;
+    created_at: string;
+    listing: { title: string } | null;
+  }[];
+
+  const byPath = new Map<string, ViewedPath>();
+  for (const r of rows) {
+    const found = byPath.get(r.path);
+    if (found) {
+      found.views += 1;
+      // Rows arrive newest first, so the first one seen is the latest.
+    } else {
+      byPath.set(r.path, {
+        path: r.path,
+        title: r.listing?.title ?? null,
+        views: 1,
+        last: r.created_at,
+      });
+    }
+  }
+
+  return [...byPath.values()].sort(
+    (a, b) => b.views - a.views || b.last.localeCompare(a.last)
+  );
 }
 
 export async function adminStats(): Promise<AdminStats | null> {
