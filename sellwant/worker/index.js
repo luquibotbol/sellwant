@@ -580,17 +580,18 @@ async function recordView(request, env, ctx) {
 
   // Not awaited: the response goes back immediately and the write finishes
   // after it. waitUntil is what keeps the worker alive long enough to do that.
+  // Through record_view rather than straight at the table: anon holds no
+  // privileges on page_views at all, so the day, the timestamp and the row id
+  // are decided server-side and cannot be supplied by whoever posts here.
+  // Duplicate views from one tab on one day are dropped inside the function.
   ctx.waitUntil(
-    fetch(`${env.SUPABASE_URL}/rest/v1/page_views`, {
+    fetch(`${env.SUPABASE_URL}/rest/v1/rpc/record_view`, {
       method: 'POST',
       headers: {
         apikey: env.SUPABASE_ANON_KEY,
         'Content-Type': 'application/json',
-        // A repeat view from the same tab on the same day hits the unique
-        // constraint; that is the intended outcome, not an error to report.
-        Prefer: 'resolution=ignore-duplicates,return=minimal',
       },
-      body: JSON.stringify({ path, visit_id: visit, listing_id: listingId }),
+      body: JSON.stringify({ p_path: path, p_visit_id: visit, p_listing_id: listingId }),
     }).catch(() => {})
   );
 
