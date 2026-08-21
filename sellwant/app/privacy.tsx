@@ -21,7 +21,7 @@ export default function Privacy() {
       <LegalPage
         title="Privacy"
         updated="18 August 2026"
-        intro="What we collect, who can see it, and how to get rid of it. Short, because we collect little and sell none of it."
+        intro="What we collect, who can see it, and how to get rid of it. Short, because we collect little, keep less, and sell none of it."
         sections={[
           {
             heading: 'What we collect',
@@ -33,6 +33,7 @@ export default function Privacy() {
               'Optionally payment handles such as Venmo or Zelle, shown only to someone you have a deal with. We never see a payment.',
               'What you post: listings, offers, counter-offers and messages on them. These are public by design.',
               'Basic technical data your browser sends, such as an IP address, used to serve and secure the site.',
+              'Which pages get looked at. We count that a page was viewed — the address, and which listing it was — so we can see what people actually use. There is no cookie and no profile: views are grouped by a random number that lives in one browser tab and is thrown away when you close it, so we can tell one person reading four listings from four people reading one, and we cannot follow anybody between visits or across sites. Your IP is not stored with it.',
             ],
           },
           {
@@ -41,7 +42,7 @@ export default function Privacy() {
               'Anyone, signed in or not: listings, prices, offer amounts and the going rate. Logged-out visitors cannot see who posted or who offered.',
               'Signed-in people: names, photos, Instagram handles and completed-handoff counts.',
               'Only the two people in an agreed deal: each other’s phone number and payment handles. This is enforced in the database, not just in the interface.',
-              'Nobody else. We do not sell your data, we do not share it with advertisers, and we do not run ad tracking.',
+              'Nobody else. We do not sell your data, we do not share it with advertisers, and we do not run ad tracking. The page counts above are ours alone — they go to our own database, not to an analytics company, and they are read only by us.',
             ],
           },
           {

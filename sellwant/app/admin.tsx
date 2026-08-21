@@ -9,6 +9,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
 import {
   adminStats,
+  adminViewStats,
   signupsOverTime,
   Bucket,
   adminReports,
@@ -48,6 +49,7 @@ export default function AdminScreen() {
   const session = useSession();
   const stats = useAsync(adminStats, []);
   const [bucket, setBucket] = useState<Bucket>('day');
+  const views = useAsync(() => adminViewStats(30), []);
   const signups = useAsync(() => signupsOverTime(bucket), [bucket]);
   const [showReviewed, setShowReviewed] = useState(false);
   const reports = useAsync(() => adminReports(showReviewed), [showReviewed]);
@@ -108,6 +110,63 @@ export default function AdminScreen() {
         <Separator style={styles.vline} />
         <Stat label="active this week" value={s.users.active_7d} sub={`${s.users.via_google} via Google`} />
       </Card>
+
+      {/* Traffic ------------------------------------------------------- */}
+      <Text variant="heading" style={styles.section}>
+        Who is looking
+      </Text>
+      <Card style={styles.chartCard}>
+        <Text variant="small" tone="muted">
+          Page views, last 30 days
+        </Text>
+        {views.data ? (
+          <>
+            <TimeSeriesLine
+              points={views.data.daily.map((d) => {
+                const start = new Date(`${d.day}T00:00:00`);
+                return {
+                  start,
+                  label: start.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+                  // The tooltip has room to break the total apart, which is
+                  // the whole reason to hover a traffic chart.
+                  full: `${start.toLocaleDateString(undefined, {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                  })} · ${d.feed} feed · ${d.listings} listings`,
+                  count: d.total,
+                };
+              })}
+            />
+            {/* The split matters more than the total: feed views are people
+                arriving, listing views are people going somewhere. */}
+            <CompositionBar
+              parts={[
+                { label: 'Feed', value: views.data.daily.reduce((n, d) => n + d.feed, 0) },
+                { label: 'Listings', value: views.data.daily.reduce((n, d) => n + d.listings, 0) },
+              ]}
+            />
+          </>
+        ) : (
+          <Text variant="caption" tone="subtle" style={styles.chartNote}>
+            Nothing yet — this fills once the migration is applied.
+          </Text>
+        )}
+      </Card>
+
+      {!!views.data?.top_listings.length && (
+        <Card style={styles.chartCard}>
+          <Text variant="small" tone="muted">
+            Most looked at
+          </Text>
+          <FunnelChart
+            stages={views.data.top_listings.slice(0, 6).map((l) => ({
+              label: l.title,
+              value: l.views,
+            }))}
+          />
+        </Card>
+      )}
 
       {/* Signups over time ------------------------------------------- */}
       <Text variant="heading" style={styles.section}>

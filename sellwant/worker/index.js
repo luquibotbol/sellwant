@@ -496,6 +496,107 @@ export function canonicalTarget(rawUrl, canonical = CANONICAL) {
   return url.toString();
 }
 
+
+/**
+ * Is this user agent something other than a person reading the page?
+ *
+ * Exported so it can be tested directly. Checking it by parsing this file with
+ * a regex was tried and lied twice -- an apostrophe in a comment was enough to
+ * shift the whole list -- which is the same reason canonicalTarget is exported.
+ *
+ * The link previewers matter most here and are the easiest to forget: this
+ * product spreads by somebody pasting a listing into a group chat, and every
+ * one of those pastes makes WhatsApp or iMessage or Discord fetch the page. A
+ * generic /bot/ misses facebookexternalhit entirely, which on a site like this
+ * is probably the most common non-human hit there is.
+ */
+const NOT_A_PERSON = [
+  // Generic crawlers and tooling.
+  'bot', 'crawl', 'spider', 'slurp', 'scrape', 'monitor', 'lighthouse',
+  'headless', 'curl', 'wget', 'python', 'node-fetch', 'okhttp', 'axios',
+  // Link previewers.
+  'facebookexternalhit', 'whatsapp', 'telegram', 'skypeuripreview',
+  'discord', 'slack', 'linkedin', 'pinterest', 'redditbot', 'twitterbot',
+  'embedly', 'vkshare', 'applebot', 'bingpreview', 'yandex', 'preview',
+  // Agents reading on behalf of a person, which the llms.txt work invites.
+  'gptbot', 'chatgpt', 'claude', 'anthropic', 'perplexity', 'ccbot',
+  'google-extended', 'cohere', 'bytespider', 'amazonbot',
+];
+
+export function isAgent(userAgent) {
+  const ua = String(userAgent || '').trim().toLowerCase();
+  // No agent at all is not a browser. Every browser sends one, so an absent
+  // header is either tooling or somebody who noticed that omitting it was the
+  // cheapest way to make a listing look popular.
+  if (!ua) return true;
+  return NOT_A_PERSON.some((needle) => ua.includes(needle));
+}
+
+/**
+ * A page impression, posted by the client as a beacon.
+ *
+ * The endpoint lives here rather than the client writing to Supabase directly
+ * so that three things stay true: the request is 131 bytes with no auth
+ * headers and can be a sendBeacon, the IP is seen by a server that does not
+ * keep it, and crawlers can be dropped before they reach the table.
+ *
+ * Always answers 204, whatever happens. A beacon has nobody listening for the
+ * reply, and a failure to count a view must never be visible to the person
+ * being counted.
+ */
+async function recordView(request, env, ctx) {
+  const done = new Response(null, { status: 204 });
+  if (request.method !== 'POST') return done;
+  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return done;
+
+  // Crawlers, previewers and agents are traffic, but they are not people
+  // looking at a listing, and mixing them in makes every number a guess.
+  //
+  // The link previewers matter most here and are the easiest to forget: this
+  // product spreads by someone pasting a listing into a group chat, and every
+  // one of those pastes makes WhatsApp or iMessage or Discord fetch the page.
+  // A generic /bot/ misses facebookexternalhit entirely -- the single most
+  // common non-human hit on a site like this -- so they are named.
+  const ua = request.headers.get('user-agent');
+  if (isAgent(ua)) return done;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return done;
+  }
+
+  const path = typeof body?.path === 'string' ? body.path.slice(0, 200) : '';
+  const visit = typeof body?.visit === 'string' ? body.visit.slice(0, 64) : '';
+  if (!path.startsWith('/') || visit.length < 4) return done;
+
+  // Only a real uuid becomes a listing reference; anything else is just a path.
+  const listingId =
+    typeof body?.listingId === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.listingId)
+      ? body.listingId
+      : null;
+
+  // Not awaited: the response goes back immediately and the write finishes
+  // after it. waitUntil is what keeps the worker alive long enough to do that.
+  ctx.waitUntil(
+    fetch(`${env.SUPABASE_URL}/rest/v1/page_views`, {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+        // A repeat view from the same tab on the same day hits the unique
+        // constraint; that is the intended outcome, not an error to report.
+        Prefer: 'resolution=ignore-duplicates,return=minimal',
+      },
+      body: JSON.stringify({ path, visit_id: visit, listing_id: listingId }),
+    }).catch(() => {})
+  );
+
+  return done;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -513,6 +614,7 @@ export default {
     // Generated, not static files: both describe live listings.
     if (url.pathname === '/sitemap.xml') return sitemap(env, url.origin);
     if (url.pathname === '/api/listings.json') return listingsJson(env, url.origin);
+    if (url.pathname === '/api/view') return recordView(request, env, ctx);
 
     // With run_worker_first the platform no longer tries assets before us, so
     // do it here. Anything that matches a real file -- every page, script,

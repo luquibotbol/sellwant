@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -16,6 +16,7 @@ import Head from 'expo-router/head';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import BottomNav from '@/components/BottomNav';
 import { ErrorBoundary } from './error-boundary';
+import { trackView } from '@/services/analytics';
 import { installUrlCleaner } from '@/lib/clean-router-url';
 import { colors, type as typeScale } from '@/constants/theme';
 
@@ -38,7 +39,24 @@ const BLURB =
   'Buy what you want. Sell what you have. A two-sided marketplace for the ' +
   'tickets your friends are already trading.';
 
+/**
+ * One impression per screen.
+ *
+ * Lives in the root layout because it is the only place that sees every route
+ * without each screen having to remember. The effect does no work beyond
+ * calling into analytics, which debounces and hands off to sendBeacon -- there
+ * is no fetch on this path and nothing here can delay a render.
+ */
+function useViewTracking() {
+  const pathname = usePathname();
+  useEffect(() => {
+    const listing = pathname.startsWith('/event/') ? pathname.split('/')[2] : undefined;
+    trackView(pathname, listing);
+  }, [pathname]);
+}
+
 export default function RootLayout() {
+  useViewTracking();
   // Geist is most of what makes the UI read as Vercel-like, so hold the splash
   // until it resolves rather than flashing a system-font frame.
   const [fontsLoaded, fontError] = useFonts({

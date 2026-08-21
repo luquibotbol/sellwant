@@ -1142,6 +1142,18 @@ export async function signupsOverTime(bucket: Bucket): Promise<BucketPoint[]> {
   return points;
 }
 
+export interface ViewStats {
+  daily: { day: string; feed: number; listings: number; total: number }[];
+  top_listings: { id: string; title: string; views: number }[];
+}
+
+/** Traffic for the dashboard. Null when the RPC refuses, same as adminStats. */
+export async function adminViewStats(days = 30): Promise<ViewStats | null> {
+  const { data, error } = await supabase.rpc('admin_view_stats', { p_days: days });
+  if (error) return null;
+  return (data as ViewStats) ?? null;
+}
+
 export async function adminStats(): Promise<AdminStats | null> {
   const { data, error } = await supabase.rpc('admin_stats');
   if (error) return null;
