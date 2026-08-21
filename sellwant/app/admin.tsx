@@ -9,6 +9,8 @@ import { useAsync } from '@/hooks/useAsync';
 import { useSession } from '@/hooks/useSession';
 import {
   adminStats,
+  adminViewStats,
+  adminRecentViews,
   signupsOverTime,
   Bucket,
   adminReports,
@@ -44,10 +46,21 @@ function Stat({ label, value, sub }: { label: string; value: string | number; su
  * anyone else rather than "forbidden", because confirming the route exists
  * tells someone there is something here worth attacking.
  */
+/** The two questions the dashboard answers, kept apart. */
+type AdminTab = 'overview' | 'impressions';
+
 export default function AdminScreen() {
   const session = useSession();
   const stats = useAsync(adminStats, []);
   const [bucket, setBucket] = useState<Bucket>('day');
+  const views = useAsync(() => adminViewStats(30), []);
+  const [tab, setTab] = useState<AdminTab>('overview');
+  // Only fetched when the tab is open: nobody reading the funnel needs fifty
+  // rows of page views loaded behind it.
+  const recent = useAsync(
+    () => (tab === 'impressions' ? adminRecentViews(50) : Promise.resolve([])),
+    [tab]
+  );
   const signups = useAsync(() => signupsOverTime(bucket), [bucket]);
   const [showReviewed, setShowReviewed] = useState(false);
   const reports = useAsync(() => adminReports(showReviewed), [showReviewed]);
@@ -96,6 +109,22 @@ export default function AdminScreen() {
       <Text variant="caption" tone="subtle">
         Updated {relativeTime(s.generated_at)}
       </Text>
+
+      {/* Dos vistas, no una lista infinita. Las impresiones responden una
+          pregunta distinta del resto del panel -- cuánta gente llega -- y
+          mezclarlas obliga a scrollear por el embudo para verlas. */}
+      <SegmentedFilter
+        options={[
+          { value: 'overview' as AdminTab, label: 'Overview' },
+          { value: 'impressions' as AdminTab, label: 'Impressions' },
+        ]}
+        value={tab}
+        onChange={setTab}
+        style={styles.tabs}
+      />
+
+      {tab === 'overview' && (
+        <>
 
       {/* Growth ------------------------------------------------------- */}
       <Text variant="heading" style={styles.sectionFirst}>
@@ -312,6 +341,109 @@ export default function AdminScreen() {
           </Card>
         ))
       )}
+        </>
+      )}
+
+      {tab === 'impressions' && (
+        <>
+
+      {/* Traffic ------------------------------------------------------- */}
+      <Text variant="heading" style={styles.section}>
+        Who is looking
+      </Text>
+      <Card style={styles.chartCard}>
+        <Text variant="small" tone="muted">
+          Page views, last 30 days
+        </Text>
+        {views.data ? (
+          <>
+            <TimeSeriesLine
+              points={views.data.daily.map((d) => {
+                const start = new Date(`${d.day}T00:00:00`);
+                return {
+                  start,
+                  label: start.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+                  // The tooltip has room to break the total apart, which is
+                  // the whole reason to hover a traffic chart.
+                  full: `${start.toLocaleDateString(undefined, {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                  })} · ${d.feed} feed · ${d.listings} listings`,
+                  count: d.total,
+                };
+              })}
+            />
+            {/* The split matters more than the total: feed views are people
+                arriving, listing views are people going somewhere. */}
+            <CompositionBar
+              parts={[
+                { label: 'Feed', value: views.data.daily.reduce((n, d) => n + d.feed, 0) },
+                { label: 'Listings', value: views.data.daily.reduce((n, d) => n + d.listings, 0) },
+              ]}
+            />
+          </>
+        ) : (
+          <Text variant="caption" tone="subtle" style={styles.chartNote}>
+            Nothing yet — this fills once the migration is applied.
+          </Text>
+        )}
+      </Card>
+
+      {!!views.data?.top_listings.length && (
+        <Card style={styles.chartCard}>
+          <Text variant="small" tone="muted">
+            Most looked at
+          </Text>
+          <FunnelChart
+            stages={views.data.top_listings.slice(0, 6).map((l) => ({
+              label: l.title,
+              value: l.views,
+            }))}
+          />
+        </Card>
+      )}
+
+
+          {/* Los registros crudos. Un panel que solo muestra agregados no deja
+              contestar "¿esto que acabo de hacer se contó?", que es la primera
+              pregunta cuando un número parece raro. */}
+          <Text variant="heading" style={styles.section}>
+            Últimas vistas
+          </Text>
+          <Card style={styles.chartCard}>
+            {recent.loading && !recent.data ? (
+              <ActivityIndicator color={colors.mutedForeground} />
+            ) : !recent.data?.length ? (
+              <Text variant="caption" tone="subtle">
+                Todavía nada. Se llena en cuanto corras la migración.
+              </Text>
+            ) : (
+              recent.data.map((v, i) => (
+                <View key={v.id}>
+                  {i > 0 && <Separator style={styles.rowLine} />}
+                  <View style={styles.viewRow}>
+                    <View style={styles.viewMain}>
+                      <Text variant="small" numberOfLines={1}>
+                        {v.listing?.title ?? v.path}
+                      </Text>
+                      {!!v.listing && (
+                        <Text variant="caption" tone="subtle" numberOfLines={1}>
+                          {v.path}
+                        </Text>
+                      )}
+                    </View>
+                    <Text variant="caption" tone="subtle">
+                      {relativeTime(v.created_at)}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </Card>
+        </>
+      )}
+
     </ScrollView>
   );
 }
@@ -328,6 +460,16 @@ const styles = StyleSheet.create({
   centered: { alignItems: 'center', justifyContent: 'center' },
   sectionFirst: { marginTop: space[5], marginBottom: space[3] },
   chartCard: { marginTop: space[3] },
+  tabs: { marginBottom: space[2] },
+  rowLine: { marginHorizontal: -space[4] },
+  viewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space[3],
+    paddingVertical: space[3],
+  },
+  viewMain: { flex: 1 },
   chartNote: { marginTop: space[4] },
   chartLoading: { height: 176, alignItems: 'center', justifyContent: 'center' },
   section: { marginTop: space[8], marginBottom: space[3] },
