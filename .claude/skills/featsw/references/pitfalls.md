@@ -174,3 +174,34 @@ ignore it. Use real mouse events at real coordinates.
 consumes Escape before it reaches `document`, and handlers underneath can stop
 propagation. The first version of the city dropdown's Escape handler did
 nothing for exactly this reason.
+
+## Postgres, continued
+
+**`RETURNS TABLE` makes every output column a variable too, and plpgsql compiles
+lazily.** An unqualified reference to one of those names inside the body is
+ambiguous — and the error does not appear at `CREATE`, or at deploy, but the
+first time the function is actually called, which for a cron-driven function
+means in production at some arbitrary later minute. Qualify every reference, and
+set `#variable_conflict use_column` so the failure mode is defined.
+
+**A migration can be parsed even when it cannot be applied.** `pip install
+pglast` binds libpg_query, the real Postgres parser: `parse_sql(text)` for the
+statements, `parse_plpgsql_json(fn)` for the dollar-quoted bodies that the outer
+grammar treats as opaque strings. Syntax only — it says nothing about whether
+the columns exist — but it is free and it runs here.
+
+## Email
+
+**DMARC `p=reject` with no SPF and no DKIM rejects mail outright.** It does not
+land in spam; the receiver refuses it. Before building anything that sends,
+`dig +short TXT`, `MX`, and `_dmarc` the domain, and believe the resolver rather
+than the deploy log or the notes — a domain can be reported as onboarded while
+no record was ever created.
+
+**One SPF record per name.** Two senders on the apex means hand-merging them.
+Verify the second sender on a subdomain instead; it inherits the apex DMARC
+policy either way.
+
+**A GET that unsubscribes will unsubscribe people who never read the email.**
+Corporate mail scanners and link previewers fetch every URL in a message. Show a
+button on GET and act on POST; one-click clients POST, so nothing is lost.
