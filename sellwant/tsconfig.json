@@ -9,7 +9,9 @@
     },
     "types": [
       "bun"
-    ]
+    ],
+    "module": "esnext",
+    "moduleResolution": "bundler"
   },
   "include": [
     "**/*.ts",

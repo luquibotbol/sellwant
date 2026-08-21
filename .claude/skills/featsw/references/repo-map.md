@@ -49,6 +49,39 @@ cd sellwant && bun run test              # full suite, hits production
 Browser verification uses the preview tools with the launch config named
 `sellwant-web` (port 8081). Never start a dev server with Bash.
 
+## Performance baseline
+
+Measured on production, 2026-08-20. These are the numbers a change should be
+compared against, not a target that has been met:
+
+| | |
+|---|---|
+| Web bundle | **291 KB** brotli / 1383 KB raw — every visitor pays this before anything works |
+| Lazy chunk | jsQR, 127 KB raw, fetched only when someone picks an image |
+| HTML shell | ~8.9 KB |
+| TTFB `/admin` | 0.34 s (static asset, edge HIT) |
+| TTFB `/feed` | 0.61 s |
+| TTFB `/` | 0.93 s — the worker reads listings to inject the feed's markup |
+| Static assets | `cache-control: immutable`, 1 year, `cf-cache-status: HIT` |
+
+The bundle is the number to watch. It is one file that everyone downloads on a
+phone, and it grows silently: a dependency added for one screen ships to every
+visitor. Check it before and after adding one — `expo export -p web --source-maps`,
+then read the map's `sourcesContent` to see the cost per package. Guessing which
+dependency is heavy does not work; the answer here was jsQR at 250 KB, which
+nobody would have picked.
+
+Two mechanisms already in use, worth reaching for again:
+
+- `await import('x')` inside the function that needs it. Metro emits a separate
+  chunk. This is how jsQR left the entry bundle.
+- A `.web.tsx` stub that renders null. Metro resolves it on web and the native
+  module never enters the graph — how `expo-camera` left. `DateField.web.tsx`
+  is the older example.
+
+The Geist subpath import in `app/_layout.tsx` is the cautionary tale: importing
+the package root cost 1.66 MB to use four weights.
+
 ## Test fixtures
 
 Two confirmed accounts, both `@example.edu`, password in `SELLWANT_TEST_PASSWORD`

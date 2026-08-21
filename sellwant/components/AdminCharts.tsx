@@ -313,8 +313,11 @@ export function TimeSeriesLine({ points }: { points: BucketPoint[] }) {
 
         {/* Markers only where they say something: the busiest bucket and the
             one still filling. A dot on all thirty is a dotted line. */}
+        {/* Deduplicated: when the busiest bucket is also the one still filling,
+            both markers are the same point, and rendering it twice gave two
+            children the same key -- React warns and is free to drop either. */}
         {width > 0 &&
-          [peakIndex, points.length - 1].map((i) => (
+          [...new Set([peakIndex, points.length - 1])].map((i) => (
             <View
               key={`dot-${points[i].start.getTime()}`}
               style={[styles.dot, { left: xy[i].x - 4, top: xy[i].y - 4 }]}
