@@ -215,3 +215,59 @@ truth, and each time a few minutes went into chasing a bug that did not exist.
 **Signal:** on react-native-web, look before measuring. The DOM is for
 confirming a number the picture already implies, not for deciding whether
 something rendered.
+
+---
+
+### 2026-08-21 — The DNS in TODO.md had never existed
+
+`docs/TODO.md` recorded `sellwant.com` as onboarded to Cloudflare Email Sending
+with MX, SPF, DKIM and DMARC. Two public resolvers agree that the apex has **no
+TXT record at all**, no MX, and DMARC at `p=reject` — a policy telling every
+receiver to reject mail that has nothing to align against. This is precisely the
+failure `wrangler.jsonc` already warns about for custom domains: an OAuth login
+without DNS scope reports success and creates nothing.
+
+**Signal:** `dig` the record before building on it. A written record of
+infrastructure is a claim about the past, and the one thing that had been
+written down was the one thing nobody had re-checked. Notably it may also mean
+signup confirmation mail has been failing silently for some time.
+
+---
+
+### 2026-08-21 — libpg_query will parse a migration this session cannot apply
+
+DDL is blocked here, so migrations normally ship read-but-unrun. `pip install
+pglast` wraps the actual Postgres parser: `parse_sql` covers the statements and
+`parse_plpgsql_json` covers the dollar-quoted function bodies the outer grammar
+skips straight over. It caught nothing this time, but it turns "hand it over and
+hope" into "syntax is proven, semantics are not".
+
+**Signal:** when the blocker is that we cannot *run* something, check whether we
+can still *parse* it. It is not the same guarantee and it is much better than
+none.
+
+---
+
+### 2026-08-21 — A helper said "authorised" when handed two blanks
+
+The constant-time comparison behind the unsubscribe link returned **true** for
+empty against empty. Nothing reached it that way — the computed signature is
+always 32 hex characters — so it was a latent hazard rather than a live bug, and
+only a test that bothered to pass `(null, undefined)` found it.
+
+**Signal:** for any comparison standing in for an authorisation check, test the
+absent case explicitly. "Both sides missing" quietly resolving to "they match"
+is the wrong default to leave under a link anyone can click.
+
+---
+
+### 2026-08-21 — The footer promised a screen that did not exist
+
+The unsubscribe confirmation said "you can turn them back on from your profile".
+There is no such control on the profile screen, and this change deliberately
+added no client code at all. Self-review caught it; the fix was to make the undo
+a working link on that same page rather than to go and build the screen.
+
+**Signal:** read new user-facing copy as a promise and check each one resolves.
+A sentence pointing at a feature is indistinguishable from a sentence
+implementing one until somebody goes looking.

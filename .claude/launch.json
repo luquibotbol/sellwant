@@ -4,9 +4,28 @@
     {
       "name": "sellwant-web",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["expo", "start", "--web", "--port", "8081"],
+      "runtimeArgs": [
+        "expo",
+        "start",
+        "--web",
+        "--port",
+        "8081"
+      ],
       "cwd": "sellwant",
       "port": 8081
+    },
+    {
+      "name": "sellwant-worker",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--port",
+        "8788",
+        "--test-scheduled"
+      ],
+      "cwd": "sellwant",
+      "port": 8788
     }
   ]
 }

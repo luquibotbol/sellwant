@@ -39,6 +39,11 @@ yarn-error.*
 # wrangler dev local state (miniflare caches, temp bundles)
 .wrangler/
 
+# Worker secrets for `wrangler dev`. The deployed ones live in Cloudflare via
+# `wrangler secret put`; this is the local stand-in and holds the same values,
+# including a Supabase key that bypasses RLS entirely.
+.dev.vars
+
 # Conflict copies. Something syncing this folder (iCloud Drive syncs
 # ~/Documents by default) writes "cities 2.ts" beside "cities.ts" whenever it
 # sees two versions of a file. Seven of them were committed before anyone
