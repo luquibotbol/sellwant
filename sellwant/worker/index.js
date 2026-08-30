@@ -856,26 +856,30 @@ async function drainOutbox(env) {
 }
 
 /**
- * Unsubscribe.
+ * The email preferences page.
  *
- * GET shows a button; POST is what actually turns the emails off. That split
- * is not politeness -- corporate mail scanners and link-preview fetchers open
- * every URL in a message, and a GET that unsubscribes would silently opt
- * people out of mail they never even read. One-click clients POST, so they
- * still work in a single step.
+ * One signed URL, durable: it reads the current setting and offers whichever
+ * action is not already true. That is the whole reason it is a page rather
+ * than a one-shot action -- an unsubscribe that can only ever unsubscribe is a
+ * one-way door, because the way back would normally be a link in an email and
+ * that is precisely what the person just switched off.
+ *
+ * GET never writes. Corporate mail scanners and link previewers open every URL
+ * in a message, so a GET that acted would opt people out of mail they have not
+ * read. One-click clients POST, so they still work in a single step.
  */
-async function unsubscribe(request, env) {
-  const page = (body, status = 200) =>
+async function emailPrefs(request, env) {
+  const shell = (body, status = 200) =>
     new Response(
       `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
         `<title>SellWant</title>` +
-        `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
-           max-width:420px;margin:15vh auto;padding:0 24px;text-align:center;color:#18181b">${body}</div>`,
+        `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;` +
+        `max-width:420px;margin:15vh auto;padding:0 24px;text-align:center;color:#18181b">${body}</div>`,
       { status, headers: { 'content-type': 'text/html; charset=utf-8' } }
     );
 
   const cfg = mailConfig(env);
-  if (!cfg) return page('<p>Email settings are unavailable right now.</p>', 503);
+  if (!cfg) return shell('<p>Email settings are unavailable right now.</p>', 503);
 
   const url = new URL(request.url);
   const user = url.searchParams.get('u') ?? '';
@@ -883,40 +887,50 @@ async function unsubscribe(request, env) {
   const sig = url.searchParams.get('s') ?? '';
 
   if (!sameSig(sig, await unsubSig(cfg.unsub, user, kind))) {
-    return page('<p>That unsubscribe link is not valid.</p>', 400);
+    return shell('<p>That link is not valid.</p>', 400);
   }
+
+  const button = (label, on, subtle) =>
+    `<form method="POST" action="${esc(`${url.pathname}?u=${encodeURIComponent(user)}` +
+      `&k=${encodeURIComponent(kind)}&s=${sig}&on=${on ? '1' : '0'}`)}">` +
+    `<button style="${subtle
+      ? `background:none;border:0;color:#71717a;font-size:13px;text-decoration:underline;padding:0`
+      : `background:#18181b;color:#fff;border:0;padding:12px 20px;border-radius:8px;` +
+        `font-size:15px;font-weight:600`};cursor:pointer">${label}</button></form>`;
+
+  /** Whichever state we are in, with the other one always one click away. */
+  const view = (subscribed, justChanged) =>
+    shell(
+      subscribed
+        ? `<p style="font-size:17px">${justChanged
+            ? 'Done — offer emails are back on.'
+            : 'Stop emailing you about offers?'}</p>` +
+          button(justChanged ? 'Stop these emails' : 'Yes, stop these emails', false, justChanged) +
+          (justChanged
+            ? ''
+            : `<p style="font-size:13px;color:#71717a;margin-top:20px">` +
+              `You will still get emails about your account, like password resets.</p>`)
+        : `<p style="font-size:17px">${justChanged
+            ? 'Done — no more offer emails.'
+            : 'Offer emails are off.'}</p>` +
+          button('Turn them back on', true, justChanged)
+    );
 
   if (request.method !== 'POST') {
-    return page(
-      `<p style="font-size:17px">Stop emailing you about offers?</p>` +
-        `<form method="POST"><button style="background:#18181b;color:#fff;border:0;
-           padding:12px 20px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer">
-           Yes, stop these emails</button></form>` +
-        `<p style="font-size:13px;color:#71717a;margin-top:20px">
-           You will still get emails about your account, like password resets.</p>`
-    );
+    // `false` is a real answer here and `null` is a failure, so this compares
+    // against null rather than testing truthiness.
+    const current = await rpc(cfg, 'get_email_pref', { p_profile: user, p_kind: kind });
+    if (current === null) return shell('<p>That did not load. Please try again.</p>', 502);
+    return view(current !== false, false);
   }
 
-  // `on=1` is how the undo below comes back through here. Anything else turns
-  // the emails off, so a mangled link fails towards silence rather than
-  // towards mail somebody has already said they do not want.
+  // Anything other than an explicit on=1 turns the emails off, so a mangled
+  // link fails towards silence rather than towards mail somebody has already
+  // said they do not want.
   const on = url.searchParams.get('on') === '1';
-
   const ok = await rpc(cfg, 'set_email_pref', { p_profile: user, p_kind: kind, p_on: on });
-  if (ok === null) return page('<p>That did not save. Please try again.</p>', 502);
-
-  if (on) return page('<p style="font-size:17px">Done — offer emails are back on.</p>');
-
-  // The undo lives here because there is nowhere else for it to live: there is
-  // no preferences screen yet, and telling somebody to go and find one would
-  // be inventing a feature in a footer.
-  const undo = `${url.pathname}?u=${encodeURIComponent(user)}&k=${encodeURIComponent(kind)}&s=${sig}&on=1`;
-  return page(
-    `<p style="font-size:17px">Done — no more offer emails.</p>` +
-      `<form method="POST" action="${esc(undo)}">` +
-      `<button style="background:none;border:0;color:#71717a;font-size:13px;text-decoration:underline;
-         cursor:pointer;padding:0">Actually, turn them back on</button></form>`
-  );
+  if (ok === null) return shell('<p>That did not save. Please try again.</p>', 502);
+  return view(on, true);
 }
 
 export default {
@@ -941,7 +955,7 @@ export default {
     // from an email by people who are not signed in and may not have the app
     // open, and a bracket route would be one more thing to teach the rewrite
     // below about. It also keeps the client bundle exactly where it was.
-    if (url.pathname === '/api/unsubscribe') return unsubscribe(request, env);
+    if (url.pathname === '/api/unsubscribe') return emailPrefs(request, env);
 
     // With run_worker_first the platform no longer tries assets before us, so
     // do it here. Anything that matches a real file -- every page, script,

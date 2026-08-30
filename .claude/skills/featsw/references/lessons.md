@@ -271,3 +271,20 @@ a working link on that same page rather than to go and build the screen.
 **Signal:** read new user-facing copy as a promise and check each one resolves.
 A sentence pointing at a feature is indistinguishable from a sentence
 implementing one until somebody goes looking.
+
+---
+
+### 2026-08-21 — Rendering the markup beat needing the database
+
+The preferences page could not be opened in a browser: it reads its state from
+an RPC, and the migration it lives in had not been applied, so every load was a
+502. Rather than skip the visual check, the four states were rendered by calling
+the Worker's own `fetch` with a stubbed `globalThis.fetch`, written to one HTML
+file, dropped into `dist/` and opened through `wrangler dev`. Real markup, real
+browser, real screenshot — only the database answer was faked, which is exactly
+the part the unit tests pin.
+
+**Signal:** when the thing blocking a browser check is a *data* dependency
+rather than a rendering one, stub the data and render anyway. `wrangler dev`
+caches its asset manifest at startup, so a file added to `dist/` afterwards 404s
+until the server is restarted.
