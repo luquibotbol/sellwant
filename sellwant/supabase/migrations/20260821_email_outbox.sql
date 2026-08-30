@@ -270,6 +270,27 @@ $$;
 -- ------------------------------------------------------------- unsubscribe
 
 /**
+ * What this person's setting currently is.
+ *
+ * Absent row means opted in, the same rule the trigger applies -- kept in one
+ * place so the page cannot disagree with the trigger about whether somebody is
+ * subscribed. Without this the unsubscribe link is a one-way door: it can only
+ * ever say "stop", so anyone who used it has no way back short of a support
+ * request nobody has built a channel for.
+ */
+create or replace function public.get_email_pref(p_profile uuid, p_kind text)
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select case
+    when p_kind <> 'offer_received' then null
+    else coalesce(
+      (select p.offer_received from email_prefs p where p.profile_id = p_profile),
+      true
+    )
+  end;
+$$;
+
+/**
  * Turn one kind of email off (or back on) for one person.
  *
  * Called by the Worker on behalf of somebody who clicked unsubscribe, so it
@@ -297,8 +318,10 @@ $$;
 revoke all on function public.claim_email_batch(int) from public, anon, authenticated;
 revoke all on function public.mark_email_sent(uuid) from public, anon, authenticated;
 revoke all on function public.mark_email_failed(uuid, text) from public, anon, authenticated;
+revoke all on function public.get_email_pref(uuid, text) from public, anon, authenticated;
 revoke all on function public.set_email_pref(uuid, text, boolean) from public, anon, authenticated;
 grant execute on function public.claim_email_batch(int) to service_role;
 grant execute on function public.mark_email_sent(uuid) to service_role;
 grant execute on function public.mark_email_failed(uuid, text) to service_role;
+grant execute on function public.get_email_pref(uuid, text) to service_role;
 grant execute on function public.set_email_pref(uuid, text, boolean) to service_role;
