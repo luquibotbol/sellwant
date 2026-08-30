@@ -37,13 +37,32 @@
     "run_worker_first": true
   },
 
-  // Not secrets. These two are inlined into the client bundle by
+  // Drains the email outbox (20260821_email_outbox.sql). Every minute is the
+  // floor Cloudflare allows and an idle run costs nothing -- the batching that
+  // stops eight offers becoming eight emails is a five-minute delay on the row
+  // itself, not a slow cron.
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+
+  // Not secrets. The first two are inlined into the client bundle by
   // `expo export` and are readable by anyone who opens devtools -- RLS is what
   // protects the data. The Worker uses them to read active listings for link
   // previews, so a scraper is told nothing a logged-out visitor could not see.
+  //
+  // MAIL_FROM is the address notifications come FROM, and its domain must be
+  // verified in Resend. A subdomain on purpose: one SPF record is allowed per
+  // name, and the apex is where Supabase's auth mail already goes out.
+  //
+  // The three genuine secrets are set with `wrangler secret put` and are NOT
+  // in this file:
+  //   SUPABASE_SECRET_KEY  bypasses RLS -- only ever used for the outbox RPCs
+  //   RESEND_API_KEY       sending
+  //   UNSUB_SECRET         signs unsubscribe links; any 32+ random bytes
   "vars": {
     "SUPABASE_URL": "https://gguzeafbwsqkhggmcjjl.supabase.co",
-    "SUPABASE_ANON_KEY": "sb_publishable_yURvtobGL9P0gJn0Ouwh3w__I1Xr2C4"
+    "SUPABASE_ANON_KEY": "sb_publishable_yURvtobGL9P0gJn0Ouwh3w__I1Xr2C4",
+    "MAIL_FROM": "SellWant <offers@notify.sellwant.com>"
   },
 
   "observability": {
