@@ -278,18 +278,31 @@ export class PayPalSandbox {
     return this.getAuthorization(authorizationId, expected);
   }
 
-  async capture(orderId: string, authorizationId: string, expected: PaymentExpectation, requestId: string, handoffConfirmed: boolean): Promise<Capture> {
+  async capture(
+    orderId: string,
+    authorizationId: string,
+    expected: PaymentExpectation,
+    requestId: string,
+    handoffConfirmed: boolean,
+    recordCaptureId: (id: string) => Promise<void>,
+  ): Promise<Capture> {
     // The product caller must supply an authenticated, persisted human attestation.
     // The isolated CLI supplies only a local test attestation, never user authority.
     ensure(handoffConfirmed, 'Human handoff confirmation is required before capture');
+    ensure(typeof recordCaptureId === 'function', 'A durable capture ID recorder is required');
     const auth = await this.boundAuthorization(orderId, authorizationId, expected);
     ensure(auth.status === 'CREATED', 'Authorization is not available for capture; reconcile before retrying');
     if (auth.expiration_time) ensure(Date.parse(auth.expiration_time) > this.now(), 'Authorization has expired');
-    const capture = await this.request<Capture>('POST', `/v2/payments/authorizations/${resourceId(authorizationId)}/capture`, {
+    const receipt = await this.request<{ id: string }>('POST', `/v2/payments/authorizations/${resourceId(authorizationId)}/capture`, {
       amount: { currency_code: expected.currency, value: usdValue(expected.amountCents) },
       invoice_id: expected.dealId, final_capture: true,
     }, requestId);
-    return verifyCapture(capture, expected, orderId, authorizationId);
+    const captureId = resourceId(receipt?.id);
+    // PayPal's capture POST examples omit supplementary_data even with
+    // return=representation. Save its ID before another request can fail;
+    // only the separate GET can establish amount, association and status.
+    await recordCaptureId(captureId);
+    return this.getCapture(captureId, orderId, authorizationId, expected);
   }
 
   async getCapture(captureId: string, orderId: string, authorizationId: string, expected: PaymentExpectation): Promise<Capture> {

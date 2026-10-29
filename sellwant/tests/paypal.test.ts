@@ -5,6 +5,8 @@ import {
 } from '../worker/paypal';
 import { authorizationId, captureFixture, captureId, expected, fakePayPal, orderFixture, orderId, requestId, response, sandboxEnv } from './paypal-fixtures';
 
+const recordFixtureCapture = async (_id: string) => {};
+
 describe('sandbox boundaries and exact money', () => {
   test('production or missing configuration fails before network access', () => {
     expect(() => sandboxConfig({ ...sandboxEnv, PAYPAL_ENVIRONMENT: 'PRODUCTION' })).toThrow('SANDBOX');
@@ -99,13 +101,13 @@ describe('provider transport and lifecycle', () => {
 
   test('handoff and a matching uncaptured authorization are required to capture', async () => {
     const f = fakePayPal(); const client = f.client(); f.state.authorized = true;
-    await expect(client.capture(orderId, authorizationId, expected, requestId, false)).rejects.toThrow('handoff');
+    await expect(client.capture(orderId, authorizationId, expected, requestId, false, recordFixtureCapture)).rejects.toThrow('handoff');
     expect(f.calls).toHaveLength(0);
-    await expect(client.capture(orderId, 'OTHER', expected, requestId, true)).rejects.toThrow('belong');
+    await expect(client.capture(orderId, 'OTHER', expected, requestId, true, recordFixtureCapture)).rejects.toThrow('belong');
     f.state.authorizationStatus = 'VOIDED';
-    await expect(client.capture(orderId, authorizationId, expected, requestId, true)).rejects.toThrow('available');
+    await expect(client.capture(orderId, authorizationId, expected, requestId, true, recordFixtureCapture)).rejects.toThrow('available');
     f.state.authorizationStatus = 'CREATED';
-    expect((await client.capture(orderId, authorizationId, expected, requestId, true)).status).toBe('COMPLETED');
+    expect((await client.capture(orderId, authorizationId, expected, requestId, true, recordFixtureCapture)).status).toBe('COMPLETED');
     expect(f.state.captureCalls).toBe(1);
   });
 
@@ -113,8 +115,46 @@ describe('provider transport and lifecycle', () => {
     const f = fakePayPal(); f.state.authorized = true;
     f.intercept((url, init) => url.endsWith(`/authorizations/${authorizationId}`) && init.method === 'GET'
       ? response({ id: authorizationId, status: 'CREATED', amount: { currency_code: 'USD', value: '16.65' }, expiration_time: '2000-01-01T00:00:00Z' }) : undefined);
-    await expect(f.client().capture(orderId, authorizationId, expected, requestId, true)).rejects.toThrow('expired');
+    await expect(f.client().capture(orderId, authorizationId, expected, requestId, true, recordFixtureCapture)).rejects.toThrow('expired');
     expect(f.state.captureCalls).toBe(0);
+  });
+
+  test('a minimal capture receipt is recorded before verifying its separate GET', async () => {
+    const f = fakePayPal(); f.state.authorized = true;
+    let savedId: string | undefined;
+    f.intercept((url, init) => {
+      if (url.endsWith(`/captures/${captureId}`) && init.method === 'GET') expect(savedId).toBe(captureId);
+      return undefined;
+    });
+    const capture = await f.client().capture(orderId, authorizationId, expected, requestId, true, async id => { savedId = id; });
+    expect(capture.status).toBe('COMPLETED');
+    expect(savedId).toBe(captureId);
+    expect(f.state.captureCalls).toBe(1);
+    expect(f.calls.filter(call => call.url.endsWith(`/captures/${captureId}`))).toHaveLength(1);
+  });
+
+  test('capture cannot start without a durable receipt recorder', async () => {
+    const f = fakePayPal(); f.state.authorized = true;
+    await expect(f.client().capture(orderId, authorizationId, expected, requestId, true, undefined as never)).rejects.toThrow('recorder');
+    expect(f.calls).toHaveLength(0);
+  });
+
+  test('a successful capture POST cannot conceal mismatched GET payment evidence', async () => {
+    for (const tamper of [
+      (capture: ReturnType<typeof captureFixture>) => { capture.amount.value = '16.66'; },
+      (capture: ReturnType<typeof captureFixture>) => { capture.amount.currency_code = 'EUR'; },
+      (capture: ReturnType<typeof captureFixture>) => { capture.supplementary_data!.related_ids!.order_id = 'OTHERORDER'; },
+      (capture: ReturnType<typeof captureFixture>) => { capture.supplementary_data!.related_ids!.authorization_id = 'OTHERAUTH'; },
+      (capture: ReturnType<typeof captureFixture>) => { capture.final_capture = false; },
+    ]) {
+      const f = fakePayPal(); f.state.authorized = true;
+      const invalid = captureFixture(); tamper(invalid);
+      let savedId: string | undefined;
+      f.intercept((url, init) => url.endsWith(`/captures/${captureId}`) && init.method === 'GET' ? response(invalid) : undefined);
+      await expect(f.client().capture(orderId, authorizationId, expected, requestId, true, async id => { savedId = id; })).rejects.toThrow();
+      expect(savedId).toBe(captureId);
+      expect(f.state.captureCalls).toBe(1);
+    }
   });
 
   test('void is checked with GET, repeat void does not repeat mutation, captured cannot void', async () => {
@@ -182,7 +222,7 @@ describe('provider transport and lifecycle', () => {
 
   test('no capture is inferred from a pending capture response', async () => {
     const f = fakePayPal(); f.state.authorized = true; f.state.captureStatus = 'PENDING';
-    expect((await f.client().capture(orderId, authorizationId, expected, requestId, true)).status).toBe('PENDING');
+    expect((await f.client().capture(orderId, authorizationId, expected, requestId, true, recordFixtureCapture)).status).toBe('PENDING');
     expect((await f.client().getCapture(captureId, orderId, authorizationId, expected)).status).toBe('PENDING');
   });
 });

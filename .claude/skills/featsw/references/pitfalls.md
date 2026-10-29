@@ -205,3 +205,13 @@ policy either way.
 **A GET that unsubscribes will unsubscribe people who never read the email.**
 Corporate mail scanners and link previewers fetch every URL in a message. Show a
 button on GET and act on POST; one-click clients POST, so nothing is lost.
+
+## Sandbox payments
+
+**A successful mutation response may omit fields needed for verification.**
+PayPal capture POST examples omit payment associations even with full
+representation requested. Persist the returned resource ID before fetching
+details; validate the read against the expected deal, amount and receiver.
+Never report capture success from the POST status alone or issue a replacement
+capture because the verification read failed. Keep transport fixtures aligned
+with vendor examples rather than enriching them to satisfy the verifier.

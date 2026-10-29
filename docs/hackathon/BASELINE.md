@@ -58,7 +58,7 @@ The seven checked-in migrations are incremental patches, not a reproducible init
 | Browser buyer/seller journey, sandbox payment, real email | NOT RUN: accounts/configuration unavailable |
 | Local database | Docker executable exists; daemon stopped; Supabase CLI absent; base schema missing |
 
-Installed tools: macOS, Node 22.21.1, npm 10.9.4, Bun 1.4.3, Codex CLI 0.164.0, gh 2.86.0. Existing CI pins Bun 1.3.14; rerun on that version in isolated CI before release. iCloud placeholders repeatedly stalled reads and eventually made an unchanged Worker file appear empty to Bun. Final checks therefore use `/private/tmp/sellwant-verify-20261029`: exact starting commit fetched from origin, overlaid with the task's changed files, with independent frozen-lockfile dependencies. Original source content was not replaced. File-read timeouts/missing-export errors in the cloud-backed copy are not passing checks; the stable-copy results are recorded separately below.
+Installed tools: macOS, Node 22.21.1, npm 10.9.4, Bun 1.4.3, Codex CLI 0.164.0, gh 2.86.0. Existing CI pins Bun 1.3.14; that exact runtime was downloaded from the official `bun` npm package into a temporary cache and passed all 120 offline tests and QR checks locally on October 29. Hosted Linux CI was not run. No global Bun version changed. iCloud placeholders repeatedly stalled reads and eventually made an unchanged Worker file appear empty to Bun. Final checks therefore use `/private/tmp/sellwant-verify-20261029`: exact starting commit fetched from origin, overlaid with the task's changed files, with independent frozen-lockfile dependencies. Original source content was not replaced. File-read timeouts/missing-export errors in the cloud-backed copy are not passing checks; the stable-copy results are recorded separately below.
 
 ### M1 additions, October 29
 
@@ -67,6 +67,10 @@ The payment adapter is implemented in `sellwant/worker/paypal.ts` and the resuma
 Added `test:offline` with a fetch tripwire and changed CI checks to it plus QR normalization/decoding, removing shared-production DB credentials from the test job. Existing full integration tests remain available but were not run. Deployment triggers/job were not changed. `AGENTS.md` now records hackathon constraints. Optional disabled MCP fragments live in `config/hackathon-mcp.toml.example`; no PayPal/Supabase connection or new global skill installation is claimed. Existing project/OpenAI instructions and PayPal's official skill/reference guidance informed implementation.
 
 Final M1 results and exact sandbox runbook are in the execution tracker. Real provider success, buyer approval, remote webhook delivery, product authentication and database integration remain unverified.
+
+The follow-up contract review found that PayPal's capture POST examples omit payment associations even with `return=representation`. Capture now persists the returned ID before separately fetching and validating the capture. A failed verification read leaves a recoverable pending journal; it cannot label payment captured or issue a replacement capture. Regression fixtures cover the documented minimal receipt and mismatched GET evidence. [Official Payments v2 examples](https://github.com/paypal/paypal-rest-api-specifications/blob/main/openapi/payments_payment_v2.json).
+
+Dependency recheck, October 29: no local PayPal/Supabase configuration or relevant process environment was available. Expected prototype paths remain absent; connected GitHub searches did not locate an accessible prototype. Git history across local refs contains only incremental SQL patches (and deleted conflict copies), with no core Supabase schema. These searches do not prove that a private or unindexed prototype does not exist; Lucas still needs to supply its location/access.
 
 ## Tooling: keep the boundaries clear
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { newJournal, SandboxJournal, SandboxSession } from '../scripts/lib/paypal-session';
-import { expected, fakePayPal } from './paypal-fixtures';
+import { captureId, expected, fakePayPal, orderId, response } from './paypal-fixtures';
 
 function setup() {
   const fixture = fakePayPal();
@@ -97,6 +97,35 @@ describe('resumable sandbox payment proof', () => {
     await f.session().capture();
     expect(f.saved().operations.capture?.requestId).toBe(key);
     expect(f.saved().state).toBe('captured');
+  });
+
+  test('a failed capture verification read resumes by its persisted ID even when order omits captures', async () => {
+    const f = setup(); await f.session().create(); f.fixture.state.approved = true;
+    await f.session().authorize(); await f.session().handoff();
+    let verificationUnavailable = true;
+    f.fixture.intercept((url, init) => {
+      if (url.endsWith(`/orders/${orderId}`) && init.method === 'GET') {
+        const order = f.fixture.order();
+        delete order.purchase_units[0].payments!.captures;
+        return response(order);
+      }
+      if (url.endsWith(`/captures/${captureId}`) && init.method === 'GET') {
+        expect(f.saved().captureId).toBe(captureId);
+        expect(f.saved().state).toBe('capture_pending');
+        if (verificationUnavailable) return response({ name: 'SERVICE_UNAVAILABLE' }, 503);
+      }
+      return undefined;
+    });
+    await expect(f.session().capture()).rejects.toThrow('SERVICE_UNAVAILABLE');
+    expect(f.saved().captureId).toBe(captureId);
+    expect(f.saved().state).toBe('capture_pending');
+    expect(f.fixture.state.captureCalls).toBe(1);
+    verificationUnavailable = false;
+    await f.session().reconcile();
+    expect(f.saved().state).toBe('captured');
+    f.fixture.intercept(undefined);
+    await f.session().capture();
+    expect(f.fixture.state.captureCalls).toBe(1);
   });
 
   test('pending capture remains pending until PayPal confirms COMPLETED', async () => {

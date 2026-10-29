@@ -143,9 +143,10 @@ export class SandboxSession {
     requireThat(!j.operations.void && j.state !== 'voided', 'A void has been requested; capture is forbidden');
     requireThat(!j.captureId, 'Capture already exists; use status to reconcile it');
     const id = await this.operation('capture', 'capture_pending');
-    const capture = await this.paypal.capture(j.orderId, j.authorizationId, j.expected, id, true);
-    j.captureId = capture.id;
-    await this.save();
+    await this.paypal.capture(j.orderId, j.authorizationId, j.expected, id, true, async captureId => {
+      j.captureId = captureId;
+      await this.save();
+    });
     const state = await this.reconcile();
     requireThat(state === 'captured', 'Capture is not completed; use status for reconciliation');
   }

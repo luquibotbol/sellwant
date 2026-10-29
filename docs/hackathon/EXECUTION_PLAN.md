@@ -121,7 +121,7 @@ States: planned = design only; implemented = code exists; verified = stated chec
 | M0 repo audit and branch | Verified | Baseline commit, isolated branch, existing untracked brief preserved |
 | M0 tooling and deadline research | Verified documentation | Official URLs/setup matrix; Codex local subcommands checked; no new account connection claimed |
 | M0 local baseline | Verified with limits | 87 offline tests, normalization/PNG checks, typecheck and placeholder web build pass; DB/browser/payment not run |
-| M1 adapter, harness and local safety checks | Verified locally; external gate still blocked | Server-only sandbox adapter, private resumable journal/lock, CLI; 29 new tests, 116 total offline tests; typecheck/build pass |
+| M1 adapter, harness and local safety checks | Verified locally; external gate still blocked | Server-only sandbox adapter, private resumable journal/lock, CLI; 33 payment tests, 120 total offline tests; pinned Bun 1.3.14 passes; typecheck/build evidence below |
 | M1 actual sandbox authorize/capture/void | Blocked | No PayPal app/merchant/buyer credentials available |
 | M2 database/prototype integration | Planned; dependencies missing | Need actual base schema and prototype source/commit, dev DB |
 | M3 AI/watcher/notifications/full handoff | Planned | Follows M2 and provider/dev service access |
@@ -137,17 +137,28 @@ States: planned = design only; implemented = code exists; verified = stated chec
 |---|---|
 | Frozen install | Passed in stable verification checkout; no lockfile change |
 | `bun run typecheck` | Passed after correcting new TypeScript errors found by the first stable run |
-| `bun run test:offline` | Passed: 116 tests across 16 files, 0 failures, 384 assertions; includes 29 new payment/session/CLI cases |
+| Offline suite with pinned CI Bun 1.3.14 | Passed: 120 tests across 16 files, 0 failures, 420 assertions; includes 33 payment/session/CLI cases. Invoked the temporary 1.3.14 binary directly so nested tests use that runtime |
+| `bun run test:paypal` with installed Bun 1.4.3 | Passed: 33 payment/session/CLI cases, 0 failures |
 | `bun scripts/test-normalise.ts`, QR generation and `test-decode.ts` | Passed: 13 normalization/mask + 5 PNG/hash checks |
 | Web export with local placeholder config | Passed: 21 static routes, entry 1.42 MB, lazy jsQR 130 kB; runtime DB not tested |
 | CLI no-credentials smoke | Expected rejection: `PAYPAL_ENVIRONMENT must be SANDBOX`; no provider call |
 | Bundle and setup checks | Server/test PayPal markers absent from both frontend bundles; optional MCP TOML parses with all account tools disabled; Git diff whitespace check passed |
 | Real sandbox buyer approval/authorize/capture/void | NOT RUN; blocked on app/merchant/buyer access |
-| Actual database/RLS, browser buyer/seller, deployed webhook/email, CI Bun 1.3.14 | NOT RUN; not claimed passing |
+| Actual database/RLS, browser buyer/seller, deployed webhook/email, hosted Linux GitHub Actions | NOT RUN; not claimed passing |
 
 The first cloud-backed post-change suite hit a QR file-read timeout; another saw empty Worker exports. Those failures were resolved for verification by using the stable exact-commit checkout, not by weakening assertions or extending timeouts. Focused provider tests use mocks and cannot prove account eligibility, API response compatibility or money movement.
 
 All 17 task files were compared byte for byte with the stable verified checkout. The original branch diff contains only the three intended modifications plus the new milestone files; the user's brief remains untracked and preserved. No push or merge was performed.
+
+### October 29 follow-up: provider response compatibility
+
+**Existing M1 behavior:** capture tried to verify the POST response as a complete payment resource. PayPal's official examples omit `supplementary_data` from capture POST responses, including the full-representation example, so a legitimate capture could be rejected after funds had moved. [Payments v2 specification](https://github.com/paypal/paypal-rest-api-specifications/blob/main/openapi/payments_payment_v2.json).
+
+**Changed:** the adapter requires a durable capture-ID recorder, saves the receipt ID first, then fetches the capture by ID to verify amount, currency, order, authorization, final-capture flag and status. The session stays `capture_pending` until verification succeeds. Later status/retry can recover by that ID even when the order response has no capture list; no second capture is issued. Replaced overly complete POST fixtures with the documented minimal shape and added verification/read-failure regression cases.
+
+**Verified:** typecheck; 33 focused tests on Bun 1.4.3; all 120 offline tests plus 13 normalization/mask and 5 decode/hash checks on exact Bun 1.3.14, in the stable checkout. The changed server module has no frontend imports or dependency changes; the prior web export remains packaging evidence. Real PayPal calls are still untested.
+
+**Access recheck:** no local credentials, no relevant populated environment names, no Supabase/PayPal development connector available, and no accessible prototype found through connected GitHub search or expected local paths. SQL history supplies no base schema. M1 still requires actual sandbox accounts; M2 still requires schema/dev access and prototype source. The active goal is not complete.
 
 ### Try the isolated proof
 

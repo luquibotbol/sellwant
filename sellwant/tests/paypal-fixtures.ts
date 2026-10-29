@@ -72,7 +72,10 @@ export function fakePayPal() {
     }
     if (url.endsWith(`/authorizations/${authorizationId}/capture`)) {
       state.captureCalls++; state.captured = true; state.authorizationStatus = 'CAPTURED';
-      return response({ ...captureFixture(), status: state.captureStatus }, 201);
+      // Minimal POST shape from PayPal's official Payments v2 examples:
+      // https://github.com/paypal/paypal-rest-api-specifications/blob/main/openapi/payments_payment_v2.json
+      // Full representation also omits related_ids; GET supplies that proof.
+      return response({ id: captureId, status: state.captureStatus, links: [] }, 201);
     }
     if (url.endsWith(`/captures/${captureId}`) && init.method === 'GET') return response({ ...captureFixture(), status: state.captureStatus });
     if (url.endsWith(`/authorizations/${authorizationId}/void`)) {

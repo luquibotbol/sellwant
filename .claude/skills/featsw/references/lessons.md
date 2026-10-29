@@ -271,3 +271,16 @@ a working link on that same page rather than to go and build the screen.
 **Signal:** read new user-facing copy as a promise and check each one resolves.
 A sentence pointing at a feature is indistinguishable from a sentence
 implementing one until somebody goes looking.
+
+---
+
+### 2026-10-29 — A payment fixture promised more than the provider response
+
+The capture fixture included order/authorization associations that PayPal's
+documented capture POST responses omit, so every test passed while a real
+capture would be rejected after funds moved. Record the returned capture ID,
+then verify the separate resource read; an interrupted read must preserve that
+ID and must not trigger another capture.
+
+**Signal:** compare transport fixtures with vendor examples, including minimal
+responses. A passing self-written fixture is not evidence of API compatibility.
