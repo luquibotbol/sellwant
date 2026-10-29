@@ -1,0 +1,18 @@
+# Optional Codex configuration fragments. Merge only needed entries into the
+# private user config or trusted project .codex/config.toml. Do not overwrite
+# existing config. Disabled until credentials/project scope are supplied.
+# Ordinary REST payment code, Bun tests and Wrangler do not depend on these.
+
+[mcp_servers.paypal-sandbox]
+enabled = false
+url = "https://mcp.sandbox.paypal.com/http"
+bearer_token_env_var = "PAYPAL_SANDBOX_ACCESS_TOKEN"
+
+[mcp_servers.supabase-dev]
+enabled = false
+url = "https://mcp.supabase.com/mcp?project_ref=DEV_PROJECT_REF&read_only=true&features=database,docs"
+
+[mcp_servers.playwright]
+enabled = false
+command = "npx"
+args = ["@playwright/mcp@latest"]

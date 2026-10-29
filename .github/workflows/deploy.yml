@@ -36,16 +36,16 @@ jobs:
       - name: Typecheck
         run: bunx tsc --noEmit
 
-      # NOTE: these hit the real Supabase project. They create their own
-      # listings and delete them afterwards, and the concurrency group above
-      # stops two runs colliding -- but they are not hermetic. A red run here
-      # can mean the shared database changed, not that the code broke.
-      - name: Tests
-        run: bun run test
-        env:
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
-          SELLWANT_TEST_PASSWORD: ${{ secrets.SELLWANT_TEST_PASSWORD }}
+      # PR checks must not mutate the production marketplace. The existing
+      # database suite remains available for an explicitly isolated project.
+      - name: Offline tests
+        run: bun run test:offline
+
+      - name: Ticket normalization and PNG decoding
+        run: |
+          bun scripts/test-normalise.ts
+          bun scripts/make-test-qrs.ts
+          bun scripts/test-decode.ts
 
   deploy:
     name: Deploy to Cloudflare
