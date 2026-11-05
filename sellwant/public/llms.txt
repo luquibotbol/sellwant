@@ -53,6 +53,20 @@ Reading is open and unauthenticated:
 - [Feed](https://sellwant.com/) — the same market as HTML
 - Listing pages carry JSON-LD: `Event` with either `Offer` or `Demand`
 
+The JSON endpoint accepts `limit=1..200` (default 200). Follow `next_url` or
+send `next_cursor` as `cursor` while `has_more` is true; cursors are opaque.
+Pages may be shorter than requested because of database limits; `has_more`
+uses an exact remaining-row count, so a short page does not mean completion.
+Listings are ordered newest first, with a stable ID tie-breaker. Each page is
+a fresh active-only read, not a frozen snapshot; listings can change between
+requests. Integer `price_cents` and `going_rate_cents` use `currency: "USD"`;
+the existing dollar fields remain available. `going_rate_status: "no_offers"`
+means the rate is null, not an estimated price. `"available"` uses only open
+offers from people other than the listing owner (highest for sell, lowest
+for want). Invalid pagination returns 400. Unavailable or malformed upstream
+data returns 503, never a successful empty market. GET and HEAD are read-only;
+responses use `no-store` so inactive inventory is not retained in caches.
+
 An agent can usefully **find, compare and negotiate**: search listings, read
 the going rate, draft an offer for its person to approve.
 

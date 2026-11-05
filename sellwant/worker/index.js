@@ -282,8 +282,7 @@ function withRouteMeta(response, meta, origin) {
     .transform(response);
 }
 
-/** Every active listing, newest first. Shared by the feed injection and the
- *  JSON endpoint so they can never describe different markets. */
+/** Best-effort active listings for SEO. JSON discovery reports failures instead. */
 async function fetchActive(env, limit = 100) {
   if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return [];
   try {
@@ -392,44 +391,185 @@ function withFeedData(response, rows, origin) {
     .transform(response);
 }
 
-/**
- * Every active listing as JSON.
- *
- * Documented in llms.txt so an agent has one stable place to read the market,
- * rather than reverse-engineering Supabase's REST shape from the bundle --
- * which works today and would tie the public contract to our database.
- */
-async function listingsJson(env, origin) {
-  const rows = await fetchActive(env, 200);
-  const body = JSON.stringify(
-    {
-      site: 'SellWant',
-      docs: `${origin}/llms.txt`,
-      note: 'Read-only. Posting and offering require a signed-in account.',
-      count: rows.length,
-      listings: rows.map((l) => ({
-        id: l.id,
-        url: `${origin}/event/${l.id}`,
-        title: l.title,
-        // "sell" means someone has a ticket; "want" means someone needs one.
-        type: l.type === 'sell' ? 'sell' : 'want',
-        price_usd: l.price_cents / 100,
-        going_rate_usd: l.best_offer_cents == null ? null : l.best_offer_cents / 100,
-        offers: l.offer_count ?? 0,
-        event_date: l.event_date,
-        location: l.location,
-      })),
-    },
-    null,
-    2
-  );
-  return new Response(body, {
-    headers: {
+const LISTING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function validDay(year, month, day) {
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  return year > 0 && month >= 1 && month <= 12 && day >= 1 &&
+    day <= [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+}
+
+/** Validate without converting through Date: PostgreSQL retains microseconds. */
+function validListingTime(value) {
+  if (typeof value !== 'string') return false;
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:Z|[+-](\d{2}):(\d{2}))$/.exec(value);
+  return !!m && validDay(+m[1], +m[2], +m[3]) &&
+    +m[4] <= 23 && +m[5] <= 59 && +m[6] <= 59 &&
+    (m[7] === undefined || (+m[7] <= 15 && +m[8] <= 59));
+}
+
+function encodeListingCursor(row) {
+  return btoa(JSON.stringify({ v: 1, created_at: row.created_at, id: row.id }))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function listingTimeMicros(value) {
+  const fraction = /\.(\d+)/.exec(value)?.[1] ?? '';
+  return BigInt(Date.parse(value)) * 1000n + BigInt(fraction.padEnd(6, '0').slice(3));
+}
+
+function olderListing(row, previous) {
+  const time = listingTimeMicros(row.created_at);
+  const previousTime = listingTimeMicros(previous.created_at);
+  return time < previousTime || (time === previousTime && row.id < previous.id);
+}
+
+function listingPagination(params) {
+  if (params.getAll('limit').length > 1 || params.getAll('cursor').length > 1) {
+    throw new Error('Use each pagination parameter once.');
+  }
+  const rawLimit = params.get('limit');
+  if (rawLimit !== null && (!/^[1-9]\d{0,2}$/.test(rawLimit) || +rawLimit > 200)) {
+    throw new Error('limit must be an integer from 1 to 200.');
+  }
+  const limit = rawLimit === null ? 200 : +rawLimit;
+  const encoded = params.get('cursor');
+  if (encoded === null) return { limit, cursor: null };
+  try {
+    if (!/^[A-Za-z0-9_-]{1,512}$/.test(encoded)) throw new Error();
+    const cursor = JSON.parse(atob(encoded.replace(/-/g, '+').replace(/_/g, '/')));
+    if (!cursor || Array.isArray(cursor) ||
+        Object.keys(cursor).sort().join(',') !== 'created_at,id,v' || cursor.v !== 1 ||
+        !validListingTime(cursor.created_at) || typeof cursor.id !== 'string' ||
+        !LISTING_ID.test(cursor.id) || encodeListingCursor(cursor) !== encoded) {
+      throw new Error();
+    }
+    return { limit, cursor };
+  } catch {
+    throw new Error('cursor is invalid or uses an unsupported version.');
+  }
+}
+
+function validPublicListing(row) {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
+  const date = typeof row.event_date === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(row.event_date);
+  return typeof row.id === 'string' && LISTING_ID.test(row.id) &&
+    row.status === 'active' && validListingTime(row.created_at) &&
+    typeof row.title === 'string' && (row.type === 'sell' || row.type === 'ask') &&
+    Number.isSafeInteger(row.price_cents) && row.price_cents > 0 &&
+    Number.isSafeInteger(row.offer_count) && row.offer_count >= 0 &&
+    (row.offer_count === 0 ? row.best_offer_cents === null :
+      Number.isSafeInteger(row.best_offer_cents) && row.best_offer_cents > 0) &&
+    (row.event_date === null || (date && validDay(+date[1], +date[2], +date[3]))) &&
+    (row.location === null || typeof row.location === 'string');
+}
+
+function exactListingCount(range, received) {
+  if (received === 0 && range === '*/0') return 0;
+  const match = typeof range === 'string' && /^(\d+)-(\d+)\/(\d+)$/.exec(range);
+  if (!match) throw new Error('Missing exact public listing count');
+  const [start, end, total] = match.slice(1).map(Number);
+  if (![start, end, total].every(Number.isSafeInteger) || start !== 0 ||
+      received === 0 || end !== received - 1 || total < received) {
+    throw new Error('Inconsistent public listing range');
+  }
+  return total;
+}
+
+async function fetchActivePage(env, { limit, cursor }) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) throw new Error('Missing public database configuration');
+  const endpoint = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/listings`);
+  if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) {
+    throw new Error('Invalid public database URL');
+  }
+  endpoint.search = new URLSearchParams({
+    select: 'id,title,type,price_cents,event_date,location,best_offer_cents,offer_count,status,created_at',
+    status: 'eq.active',
+    order: 'created_at.desc,id.desc',
+    limit: String(limit + 1),
+  }).toString();
+  if (cursor) {
+    // PostgREST combines this disjunction with status=eq.active. Both cursor
+    // values have strict grammars; no caller-supplied filter text reaches it.
+    endpoint.searchParams.set('or', `(created_at.lt."${cursor.created_at}",and(created_at.eq."${cursor.created_at}",id.lt.${cursor.id}))`);
+  }
+  const res = await fetch(endpoint.toString(), {
+    headers: { apikey: env.SUPABASE_ANON_KEY, Prefer: 'count=exact' },
+    signal: AbortSignal.timeout(3000),
+  });
+  if (!res.ok) throw new Error('Public database request failed');
+  const rows = await res.json();
+  if (!Array.isArray(rows) || rows.length > limit + 1 || !rows.every(validPublicListing) ||
+      new Set(rows.map(row => row.id)).size !== rows.length ||
+      rows.some((row, index) => {
+        const previous = index === 0 ? cursor : rows[index - 1];
+        return previous && !olderListing(row, previous);
+      })) {
+    throw new Error('Malformed public listings');
+  }
+  // A database max_rows cap can return less than the requested lookahead.
+  // Only an exact count proves exhaustion; a short page alone cannot.
+  return { rows, total: exactListingCount(res.headers.get('content-range'), rows.length) };
+}
+
+/** Public, active-only discovery. No successful empty market on upstream failure. */
+async function listingsJson(request, env, url) {
+  const respond = (data, status = 200, extraHeaders = {}) => new Response(
+    request.method === 'HEAD' ? null : JSON.stringify(data, null, 2),
+    { status, headers: {
       'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'public, max-age=0, s-maxage=60',
-      // Public data, so let a browser-based agent read it cross-origin.
+      'cache-control': 'no-store',
       'access-control-allow-origin': '*',
-    },
+      ...extraHeaders,
+    } }
+  );
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return respond({ error: 'method_not_allowed' }, 405, { allow: 'GET, HEAD' });
+  }
+  let pagination;
+  try {
+    pagination = listingPagination(url.searchParams);
+  } catch (error) {
+    return respond({ error: 'invalid_pagination', message: error.message }, 400);
+  }
+  let fetched;
+  try {
+    fetched = await fetchActivePage(env, pagination);
+  } catch {
+    return respond({ error: 'market_unavailable', message: 'Active listings are temporarily unavailable. Retry this page.' }, 503);
+  }
+  const rows = fetched.rows.slice(0, pagination.limit);
+  const hasMore = fetched.total > rows.length;
+  const nextCursor = hasMore ? encodeListingCursor(rows[rows.length - 1]) : null;
+  const nextUrl = hasMore ? new URL('/api/listings.json', url.origin) : null;
+  if (nextUrl) {
+    nextUrl.searchParams.set('limit', String(pagination.limit));
+    nextUrl.searchParams.set('cursor', nextCursor);
+  }
+  return respond({
+    site: 'SellWant',
+    docs: `${url.origin}/llms.txt`,
+    note: 'Read-only. Posting and offering require a signed-in account.',
+    count: rows.length,
+    has_more: hasMore,
+    next_cursor: nextCursor,
+    next_url: nextUrl?.toString() ?? null,
+    listings: rows.map((l) => ({
+      id: l.id,
+      url: `${url.origin}/event/${l.id}`,
+      title: l.title,
+      // "sell" means someone has a ticket; "want" means someone needs one.
+      type: l.type === 'sell' ? 'sell' : 'want',
+      price_cents: l.price_cents,
+      going_rate_cents: l.best_offer_cents,
+      currency: 'USD',
+      going_rate_status: l.offer_count === 0 ? 'no_offers' : 'available',
+      price_usd: l.price_cents / 100,
+      going_rate_usd: l.best_offer_cents == null ? null : l.best_offer_cents / 100,
+      offers: l.offer_count,
+      event_date: l.event_date,
+      location: l.location,
+    })),
   });
 }
 
@@ -935,7 +1075,7 @@ export default {
 
     // Generated, not static files: both describe live listings.
     if (url.pathname === '/sitemap.xml') return sitemap(env, url.origin);
-    if (url.pathname === '/api/listings.json') return listingsJson(env, url.origin);
+    if (url.pathname === '/api/listings.json') return listingsJson(request, env, url);
     if (url.pathname === '/api/view') return recordView(request, env, ctx);
     // Served by the Worker rather than added as an app route: it is reached
     // from an email by people who are not signed in and may not have the app
