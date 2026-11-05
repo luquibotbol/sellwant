@@ -7,6 +7,8 @@
  */
 import { supabase } from '@/services/supabase';
 import { stepFor, HandoffState, Role } from '@/lib/handoff';
+import type { Session } from '@supabase/supabase-js';
+import type { AgentCapabilityTool } from '@/lib/mandates';
 
 /**
  * An expired or revoked token should log you out, not render "something went
@@ -144,9 +146,9 @@ export async function getSession() {
   return data.session;
 }
 
-export function onAuthChange(cb: (signedIn: boolean) => void) {
+export function onAuthChange(cb: (signedIn: boolean, session: Session | null) => void) {
   const { data } = supabase.auth.onAuthStateChange((_e, session) =>
-    cb(!!session)
+    cb(!!session, session)
   );
   return () => data.subscription.unsubscribe();
 }
@@ -1252,14 +1254,20 @@ export interface AgentMandate {
 }
 
 /** Bounds remain private under owner-only RLS. */
-export async function myAgentMandates(listingId: string): Promise<AgentMandate[]> {
+export async function myAgentMandates(listingId: string, offset = 0): Promise<{
+  rows: AgentMandate[]; nextOffset: number | null;
+}> {
+  if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Invalid mandate list page.');
   const session = await getSession();
-  if (!session) return [];
-  const { data, error } = await supabase.from('agent_mandates')
-    .select('*').eq('owner_id', session.user.id).eq('listing_id', listingId)
-    .order('created_at', { ascending: false }).limit(50);
+  if (!session) return { rows: [], nextOffset: null };
+  const { data, error, count } = await supabase.from('agent_mandates')
+    .select('*', { count: 'exact' }).eq('owner_id', session.user.id).eq('listing_id', listingId)
+    .order('created_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + 49);
   if (error) await fail(error);
-  return (data ?? []) as AgentMandate[];
+  const rows = (data ?? []) as AgentMandate[];
+  if (count === null || !Number.isSafeInteger(count) || count < offset + rows.length ||
+      (rows.length === 0 && count > offset)) throw new Error('Could not verify the mandate list. Refresh to retry.');
+  return { rows, nextOffset: offset + rows.length < count ? offset + rows.length : null };
 }
 
 export async function createAgentMandateDraft(input: {
@@ -1305,4 +1313,52 @@ export async function getAgentMandateActions(mandateId: string): Promise<AgentMa
     .eq('mandate_id', mandateId).order('created_at', { ascending: false }).limit(10);
   if (error) await fail(error);
   return (data ?? []) as AgentMandateAction[];
+}
+
+export interface AgentCapability {
+  id: string;
+  mandate_id: string;
+  tools: AgentCapabilityTool[];
+  expires_at: string;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+/** The token and its hash are never selected with the metadata. */
+export async function getAgentCapabilities(mandateId: string, offset = 0): Promise<{
+  rows: AgentCapability[]; nextOffset: number | null;
+}> {
+  if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Invalid access list page.');
+  const { data, error, count } = await supabase.from('agent_capabilities')
+    .select('id,mandate_id,tools,expires_at,revoked_at,created_at', { count: 'exact' })
+    .eq('mandate_id', mandateId).order('created_at', { ascending: false })
+    .order('id', { ascending: false }).range(offset, offset + 49);
+  if (error) await fail(error);
+  const rows = (data ?? []) as AgentCapability[];
+  if (count === null || !Number.isSafeInteger(count) || count < offset + rows.length ||
+      (rows.length === 0 && count > offset)) throw new Error('Could not verify the access list. Refresh to retry.');
+  return { rows, nextOffset: offset + rows.length < count ? offset + rows.length : null };
+}
+
+export interface IssuedAgentCapability {
+  id: string;
+  token: string;
+  expires_at: string;
+  tools: AgentCapabilityTool[];
+}
+
+/** Return once to the human caller. Never persist or log this result. */
+export async function issueAgentCapability(input: {
+  mandateId: string; tools: AgentCapabilityTool[]; expiresAt: string;
+}): Promise<IssuedAgentCapability> {
+  const { data, error } = await supabase.rpc('issue_agent_capability', {
+    p_mandate_id: input.mandateId, p_tools: input.tools, p_expires_at: input.expiresAt,
+  });
+  if (error) await fail(error);
+  return data as IssuedAgentCapability;
+}
+
+export async function revokeAgentCapability(id: string): Promise<void> {
+  const { error } = await supabase.rpc('revoke_agent_capability', { p_capability_id: id });
+  if (error) await fail(error);
 }

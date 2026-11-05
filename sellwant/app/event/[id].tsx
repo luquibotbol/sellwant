@@ -8,9 +8,9 @@ import MandatePanel from '@/components/MandatePanel';
 import { colors, space, radius, maxContentWidth } from '@/constants/theme';
 import { money } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
+import { useSession, SessionState } from '@/hooks/useSession';
 import {
   getListing,
-  getSession,
   createLockIn,
   getCounterpartyContact,
   removeListing,
@@ -18,8 +18,18 @@ import {
 
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const session = useSession();
+  if (session === undefined) return (
+    <View style={[styles.container, styles.centered]}>
+      <ActivityIndicator color={colors.mutedForeground} />
+    </View>
+  );
+  return <ListingDetail key={`${id}:${session?.user.id ?? 'anonymous'}`} id={id} session={session} />;
+}
+
+/** Auth changes remount all private listing/offer/contact/mandate caches. */
+function ListingDetail({ id, session }: { id: string; session: Exclude<SessionState, undefined> }) {
   const listing = useAsync(() => getListing(id), [id]);
-  const session = useAsync(getSession, []);
   const [locking, setLocking] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
   // Arms on the first tap and fires on the second, so a stray tap on the
@@ -34,14 +44,15 @@ export default function ListingDetailScreen() {
   // your own contact row, so without this guard your own listing rendered
   // "You're locked in — here's how to reach them" with your own number.
   const posterId = listing.data?.user_id;
-  const myId = session.data?.user.id ?? null;
+  const myId = session?.user.id ?? null;
   const contact = useAsync(
     async () =>
-      posterId && myId && posterId !== myId ? getCounterpartyContact(posterId) : null,
+      posterId && myId && posterId !== myId
+        ? { forUser: myId, forPoster: posterId, details: await getCounterpartyContact(posterId) } : null,
     [posterId, myId]
   );
 
-  if (listing.loading || session.loading) {
+  if (listing.loading) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator color={colors.mutedForeground} />
@@ -74,7 +85,9 @@ export default function ListingDetailScreen() {
   // Logged out can read this page -- that is the point of a shareable link --
   // but every action still needs an account. Sending the listing along means
   // signing in returns you here rather than dumping you on an empty feed.
-  const anon = !session.data;
+  const anon = !session;
+  const contactDetails = contact.data?.forUser === myId && contact.data.forPoster === posterId
+    ? contact.data.details : null;
   const signInHere = `/signin?returnTo=${encodeURIComponent(`/event/${l.id}`)}`;
 
   const remove = async () => {
@@ -184,15 +197,15 @@ export default function ListingDetailScreen() {
       {/* Contact appears only after a lock-in exists. The rule is enforced by
           RLS on contact_details -- this just renders whatever it is allowed
           to see. */}
-      {contact.data && (
+      {contactDetails && (
         <Card accent="want" style={styles.contact}>
           <Text variant="bodyMedium">You&apos;re locked in — here&apos;s how to reach them</Text>
-          {!!contact.data.phone && (
+          {!!contactDetails.phone && (
             <Text variant="small" style={styles.contactRow}>
-              {contact.data.phone}
+              {contactDetails.phone}
             </Text>
           )}
-          {contact.data.accepted_payments.map((p) => (
+          {contactDetails.accepted_payments.map((p) => (
             <Text key={p.kind} variant="small" tone="muted" style={styles.contactRow}>
               {p.kind}: {p.value}
             </Text>

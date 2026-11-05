@@ -18,18 +18,21 @@ export function useSession(): SessionState {
 
   useEffect(() => {
     let alive = true;
+    let receivedAuthEvent = false;
     const read = async () => {
       try {
         const s = await getSession();
-        if (alive) setSession(s);
+        if (alive && !receivedAuthEvent) setSession(s);
       } catch {
-        if (alive) setSession(null);
+        if (alive && !receivedAuthEvent) setSession(null);
       }
     };
     read();
-    return onAuthChange(() => {
-      void read();
+    const unsubscribe = onAuthChange((_signedIn, next) => {
+      receivedAuthEvent = true;
+      if (alive) setSession(next);
     });
+    return () => { alive = false; unsubscribe(); };
   }, []);
 
   return session;

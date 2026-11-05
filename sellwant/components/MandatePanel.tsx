@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { Text, Card, Badge, Button, Input } from '@/components/ui';
@@ -6,8 +6,9 @@ import { colors, space } from '@/constants/theme';
 import { useAsync } from '@/hooks/useAsync';
 import { money } from '@/lib/format';
 import { mandateBoundCents, mandatePositiveInteger } from '@/lib/mandates';
+import AgentAccess from '@/components/AgentAccess';
 import {
-  Listing, myAgentMandates, createAgentMandateDraft,
+  AgentMandate, Listing, myAgentMandates, createAgentMandateDraft,
   approveAgentMandate, revokeAgentMandate, getAgentMandateActions,
 } from '@/services/data';
 
@@ -23,14 +24,41 @@ export default function MandatePanel({ listing, meId }: { listing: Listing; meId
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [activityRevision, setActivityRevision] = useState(0);
+  const [moreMandates, setMoreMandates] = useState<AgentMandate[]>([]);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [paging, setPaging] = useState(false);
+  const pageVersion = useRef(0);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(timer);
   }, []);
+  useEffect(() => () => { pageVersion.current++; }, []);
+  useEffect(() => {
+    pageVersion.current++;
+    setMoreMandates([]);
+    setNextOffset(mandates.data?.nextOffset ?? null);
+    setPaging(false);
+  }, [mandates.data]);
 
   const refresh = async () => {
+    pageVersion.current++;
+    setMoreMandates([]); setNextOffset(null); setPaging(false);
     await mandates.reload();
     setActivityRevision(value => value + 1);
+  };
+
+  const loadMore = async () => {
+    if (nextOffset === null || paging) return;
+    const version = pageVersion.current;
+    setPaging(true); setError(null);
+    try {
+      const page = await myAgentMandates(listing.id, nextOffset);
+      if (version !== pageVersion.current) return;
+      setMoreMandates(current => [...new Map([...current, ...page.rows].map(row => [row.id, row])).values()]);
+      setNextOffset(page.nextOffset);
+    } catch (e) {
+      if (version === pageVersion.current) setError((e as { message?: string })?.message ?? 'Could not load more mandates.');
+    } finally { if (version === pageVersion.current) setPaging(false); }
   };
 
   const run = async (key: string, action: () => Promise<unknown>) => {
@@ -52,7 +80,7 @@ export default function MandatePanel({ listing, meId }: { listing: Listing; meId
     setEditing(false);
   });
 
-  const rows = mandates.data ?? [];
+  const rows = [...new Map([...(mandates.data?.rows ?? []), ...moreMandates].map(row => [row.id, row])).values()];
   const canDraft = listing.status === 'active';
   const showForm = canDraft && (editing || (rows.length === 0 && !mandates.loading && !mandates.error));
 
@@ -115,9 +143,14 @@ export default function MandatePanel({ listing, meId }: { listing: Listing; meId
             {!!m.deal_id && <Button title="Open locked deal" variant="secondary" style={styles.gap}
               onPress={() => router.navigate(`/deal/${m.deal_id}` as never)} block />}
             {m.status !== 'draft' && <MandateActivity mandateId={m.id} revision={activityRevision} />}
+            {m.status !== 'draft' && <AgentAccess mandate={m} revision={activityRevision} now={now} />}
           </Card>
         );
       })}
+      {nextOffset !== null && !mandates.loading && !mandates.error && (
+        <Button title="Load more mandates" variant="outline" onPress={loadMore} loading={paging}
+          disabled={!!busy || paging} style={styles.gap} block />
+      )}
 
       {showForm ? (
         <Card style={styles.mandate}>

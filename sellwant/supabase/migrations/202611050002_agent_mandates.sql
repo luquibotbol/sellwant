@@ -4,9 +4,7 @@
 BEGIN;
 SET LOCAL ROLE postgres;
 
--- Backstop for every writer, including future code. Historical duplicates must
--- be reconciled explicitly; creation fails safely rather than deleting data.
-CREATE UNIQUE INDEX lock_ins_one_live_deal ON public.lock_ins(listing_id) WHERE state <> 'cancelled';
+-- Reuse the recovered baseline's partial unique index on live deals.
 
 CREATE TABLE public.agent_mandates (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -217,8 +217,15 @@ def cases(db):
     check(db, "poster cannot mint own top-level demand", lambda f: human(f, who='owner',key='seller',bound=1500) + action(key='seller'), rejected)
     check(db, "self acceptance rejected", lambda f: human(f) + action(kind='accept_offer',amount='NULL',offer=f"'{f['offer']}'"), rejected)
     check(db, "changed event snapshot stops agent", lambda f: human(f) + f"UPDATE public.listings SET title='Changed event' WHERE id='{f['listing']}';" + action(), rejected)
+    def suspended_denied(r, _):
+        # Privacy hardening may reject unavailable token authority before the
+        # bounded-proposal audit. Both paths must leave public trading untouched.
+        unavailable = r['attempt'] != 'ok' and r['result'] is None and r['actions'] == 0
+        rejected_proposal = r['attempt'] == 'ok' and r['result']['status'] == 'rejected' and r['actions'] == 1
+        must((unavailable or rejected_proposal) and r['deals'] == 0 and r['offers'] == 1
+             and all(m['rounds'] == 0 for m in r['mandates']))
     for who in ('buyer', 'owner'):
-        check(db, f"suspended {who} stops action", lambda f, who=who: human(f) + f"UPDATE public.profiles SET is_suspended=true WHERE id='{f[who]}';" + action(), rejected)
+        check(db, f"suspended {who} stops action", lambda f, who=who: human(f) + f"UPDATE public.profiles SET is_suspended=true WHERE id='{f[who]}';" + action(), suspended_denied)
     for listing_type in ('sell', 'ask'):
         # Swap sides and bounds for ask: poster buys, external participant sells.
         prefix = lambda f, listing_type=listing_type: (f"UPDATE public.listings SET type='{listing_type}' WHERE id='{f['listing']}';" if listing_type=='ask' else '')
@@ -485,12 +492,49 @@ def human_wait(db, operation, suspended=None):
         cleanup(db,f)
 
 
+def validate_live_index(db, remove_redundant=False):
+    rows=json.loads(db.sql("""SELECT coalesce(json_agg(json_build_object(
+      'name',c.relname,'owner',pg_get_userbyid(c.relowner),'definition',pg_get_indexdef(i.indexrelid),
+      'method',am.amname,'unique',i.indisunique,'valid',i.indisvalid,'ready',i.indisready,'immediate',i.indimmediate,
+      'key_count',i.indnkeyatts,'all_count',i.indnatts,'predicate',pg_get_expr(i.indpred,i.indrelid),
+      'expressions',pg_get_expr(i.indexprs,i.indrelid),'keys',(SELECT json_agg(a.attname ORDER BY k.n)
+        FROM unnest(i.indkey) WITH ORDINALITY k(attnum,n) JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=k.attnum)
+      ) ORDER BY c.relname),'[]') FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid
+      JOIN pg_am am ON am.oid=c.relam WHERE i.indrelid='public.lock_ins'::regclass;"""))
+    def backstop(row):
+        return (row['unique'] and row['valid'] and row['ready'] and row['immediate']
+          and row['method']=='btree' and row['key_count']==1 and row['all_count']==1
+          and row['keys']==['listing_id'] and row['expressions'] is None
+          and row['predicate']=="(state <> 'cancelled'::text)")
+    baseline.require(any(backstop(r) for r in rows),'Missing semantic partial unique live-deal backstop in recovered baseline.')
+    if remove_redundant:
+        by_name={r['name']:r for r in rows}
+        original=by_name.get('lock_ins_one_open_per_listing_idx')
+        added=by_name.get('lock_ins_one_live_deal')
+        baseline.require(original is not None and added is not None,'Expected both original and task-created indexes before duplicate cleanup.')
+        baseline.require(backstop(original) and backstop(added) and original['owner']==added['owner']=='postgres',
+                         'Index ownership/semantics do not match the known local duplicate.')
+        normalize=lambda text: re.sub(r'^CREATE UNIQUE INDEX \S+ ON ', 'CREATE UNIQUE INDEX <name> ON ',text)
+        baseline.require(normalize(original['definition'])==normalize(added['definition']),
+                         'Indexes are not identical apart from their names; refuse cleanup.')
+        db.sql("""BEGIN; SET LOCAL ROLE postgres; LOCK TABLE public.lock_ins IN SHARE MODE;
+          DO $ownership$ BEGIN
+            IF pg_get_indexdef('public.lock_ins_one_open_per_listing_idx'::regclass) IS DISTINCT FROM """+baseline.qs(original['definition'])+"""
+              OR pg_get_indexdef('public.lock_ins_one_live_deal'::regclass) IS DISTINCT FROM """+baseline.qs(added['definition'])+"""
+              OR (SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid='public.lock_ins_one_live_deal'::regclass)<>'postgres'
+            THEN RAISE EXCEPTION 'index ownership or definition changed before cleanup'; END IF;
+          END $ownership$;
+          DROP INDEX public.lock_ins_one_live_deal; COMMIT;""")
+        validate_live_index(db)
+        baseline.require(db.sql("SELECT to_regclass('public.lock_ins_one_open_per_listing_idx') IS NOT NULL AND to_regclass('public.lock_ins_one_live_deal') IS NULL;").strip()=='t',
+                         'Original baseline index was not retained during cleanup.')
+        print('Removed only the ownership-checked redundant task index; original baseline backstop retained.')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    mutations = parser.add_mutually_exclusive_group()
-    mutations.add_argument('--apply', action='store_true')
-    mutations.add_argument('--refresh-functions', action='store_true', help='Replace existing mandate RPC definitions in this isolated development database only.')
-    parser.add_argument('--ensure-live-index', action='store_true', help='Install the reviewed partial unique live-deal index into an existing local development schema.')
+    parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--remove-redundant-index', action='store_true', help='Remove only the known task-created duplicate after comparing ownership and exact definitions with the original baseline index.')
     args = parser.parse_args()
     db = baseline.Local()
     baseline.require(db.sql("SELECT to_regprocedure('public.create_lock_in(uuid,integer)') IS NOT NULL;").strip() == 't',
@@ -502,17 +546,7 @@ def main():
         db.sql((ROOT / 'supabase/migrations/202611050002_agent_mandates.sql').read_text())
         print('Applied additive mandate migration to verified isolated local DB.')
     baseline.require(db.sql("SELECT to_regclass('public.agent_mandates') IS NOT NULL;").strip() == 't', 'Apply the mandate migration locally after the core gate.')
-    if args.ensure_live_index and db.sql("SELECT to_regclass('public.lock_ins_one_live_deal') IS NULL;").strip()=='t':
-        db.sql("BEGIN; SET LOCAL ROLE postgres; CREATE UNIQUE INDEX lock_ins_one_live_deal ON public.lock_ins(listing_id) WHERE state <> 'cancelled'; COMMIT;")
-    baseline.require(db.sql("SELECT indisunique AND indpred IS NOT NULL FROM pg_index WHERE indexrelid=to_regclass('public.lock_ins_one_live_deal');").strip()=='t',
-                     'Missing partial unique live-deal backstop; apply ordered migration or --ensure-live-index locally.')
-    if args.refresh_functions:
-        migration = (ROOT / 'supabase/migrations/202611050002_agent_mandates.sql').read_text()
-        routines = re.findall(r'^CREATE(?: OR REPLACE)? FUNCTION .*?\n\$\$;', migration, re.M | re.S)
-        baseline.require(len(routines) == 16, 'Unexpected mandate function count; review refresh parser.')
-        statements = [re.sub(r'^CREATE(?: OR REPLACE)? FUNCTION', 'CREATE OR REPLACE FUNCTION', r) for r in routines]
-        db.sql('BEGIN; SET LOCAL ROLE postgres;\n' + '\n'.join(statements) + '\nCOMMIT;')
-        print('Refreshed existing mandate function definitions in isolated local DB.')
+    validate_live_index(db,args.remove_redundant_index)
     cases(db)
     races(db)
     for kind in ('capability','mandate','manual_source','trigger_capability','trigger_mandate'):
