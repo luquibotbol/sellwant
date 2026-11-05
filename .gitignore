@@ -12,5 +12,5 @@ test-qr/
 dist/
 
 # Local Supabase schema export
-/Supabase Snippet Untitled query.csv
+/Supabase Snippet Untitled query*.csv
 /SellWant Schema Metadata *.csv
