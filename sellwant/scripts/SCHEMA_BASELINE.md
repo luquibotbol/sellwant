@@ -60,3 +60,29 @@ The read-only `permissions` command checks effective positive/negative table,
 column, routine, sequence and schema privileges for `anon`, `authenticated` and
 `service_role`, rather than relying only on ACL text. This is a privilege matrix;
 transactional role/RLS behavior is exercised separately by `test-core-local.ts`.
+
+## Ordered application replay
+
+After all three November 5 migrations are installed locally:
+
+```sh
+python3 scripts/test-schema-replay-local.py
+```
+
+This verifies the same fixed local container, creates a random owned disposable
+database, and copies the current platform schema without rows or role/global
+definitions. It removes app objects only inside that disposable database,
+restores and compares the exact private baseline, checks effective grants, then
+applies whole migrations `001`, `002` and `003` in order. The resulting catalog
+and all application function definitions must match the working local database.
+Cleanup checks the database's name, OID, owner and unique ownership comment;
+unconfirmed creation outcomes require reconciliation rather than guessed cleanup.
+Connection/database overrides are rejected. Diagnostics and exact source hashes
+remain private under `.local/schema-replay/`.
+
+November 5 verification passed: 1,452 baseline privilege checks, all three whole
+migrations and all 45 resulting app function definitions. The owned database
+was removed and the original app catalog/functions were verified unchanged.
+This proves application replay against the current local platform schemas and
+shared roles. It does not verify a fresh Supabase service bootstrap or identical
+behavior on the source PostgreSQL 17.6 engine.

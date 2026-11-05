@@ -277,6 +277,9 @@ python3 scripts/test-mandates-rest-local.py
 python3 scripts/test-privacy-local.py
 bun run typecheck
 bun run test:offline
+
+# Optional ordered replay in a disposable database; current app remains intact.
+python3 scripts/test-schema-replay-local.py
 ```
 
 Baseline comparison/permission expectations refer to the recovered source, before intentional migrations. Comparing the migrated schema against the old export correctly reports differences. All committed multi-session test fixtures are ownership-checked and cleaned; ordinary cases roll back. Automatic legacy migrations remain disabled because their base schema/order is incomplete. No production migration or deployment occurred.
@@ -298,6 +301,12 @@ Baseline comparison/permission expectations refer to the recovered source, befor
 **Try:** after the ordered local migrations, point the frontend only at `http://127.0.0.1:55321` with that local stack's public anon key, enable `EXPO_PUBLIC_AGENT_TRADING_ENABLED=true`, and run `bun run web`. Use synthetic signed-in accounts/listings. Review/approve a mandate, choose “Create agent access,” review permissions/expiry, issue/copy the token, then revoke it from the same mandate panel. [Agent integration contract](AGENT_CONTRACT.md) specifies the actual persistent RPCs for Lucas's adapter; it does not substitute for his missing prototype. Follow the local verification commands above and keep service-role/PayPal secrets out of frontend variables.
 
 **Remaining:** actual buyer approval at PayPal (both current authorization checks still reject pending approval), a later explicit simulated handoff for capture, browser validation when control is restored, Lucas's prototype/source commit, and chosen LLM provider/model/access. No replacement order links were generated while buyer availability was unconfirmed. Product MCP, real model/watcher, integrated payment/handoff/notifications and end-to-end hardening remain incomplete.
+
+### November 5 ordered migration replay
+
+The privacy follow-up had been applied incrementally during development. `scripts/test-schema-replay-local.py` now verifies the complete baseline → 001 → 002 → 003 sequence in a random owned database inside the guarded local container. It copies platform schema only, with no rows or role/global definitions; removes app objects only in the disposable database; compares the restored baseline and its 25 app definitions; verifies 1,452 effective privileges; and applies each whole migration in order. The final catalog and all 45 application function definitions exactly match the working local database. The temporary database was removed and the original app catalog/functions remained unchanged. Private diagnostics include hashes of the exact applied migration bytes. Unknown CLI target overrides are rejected before database access.
+
+This verifies application replay on the current local platform schemas/shared roles, not a fresh Supabase service bootstrap or source PostgreSQL 17.6 equivalence. No browser, MCP, model or real payment completion is implied. Both existing PayPal authorization checks still return “Buyer must approve the PayPal order first.” Expected local MCP prototype paths remain absent; the requested source/commit and provider/model/access are still required. No replacement orders or production changes occurred.
 
 ### Try the isolated proof
 
