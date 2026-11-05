@@ -698,22 +698,14 @@ export async function removeListing(id: string): Promise<Removal> {
  * Commit to a listing. Who calls this depends on the listing type:
  *   sell -> the buyer locks in on someone's ticket
  *   ask  -> a seller responds to someone's want-ad
- * The database policy pins both roles against the listing, so the caller
- * cannot forge the counterparty.
+ * The RPC locks the listing and derives both roles, price and initial state.
+ * The displayed price is only an expectation; a changed price requires review.
  */
 export async function createLockIn(listing: Listing): Promise<LockIn> {
   const session = await getSession();
   if (!session) throw new Error('Not signed in');
-  const me = session.user.id;
   const { data, error } = await supabase
-    .from('lock_ins')
-    .insert({
-      listing_id: listing.id,
-      buyer_id: listing.type === 'sell' ? me : listing.user_id,
-      seller_id: listing.type === 'sell' ? listing.user_id : me,
-      locked_price_cents: listing.price_cents,
-    })
-    .select()
+    .rpc('create_lock_in', { p_listing_id: listing.id, p_expected_price_cents: listing.price_cents })
     .single();
   if (error) await fail(error);
   return data as LockIn;
@@ -764,13 +756,11 @@ export async function makeOffer(input: {
   const session = await getSession();
   if (!session) throw new Error('Not signed in');
   const { data, error } = await supabase
-    .from('offers')
-    .insert({
-      listing_id: input.listingId,
-      from_user: session.user.id,
-      amount_cents: input.amountCents,
-      message: input.message?.trim() || null,
-      parent_offer_id: input.parentOfferId ?? null,
+    .rpc('place_offer', {
+      p_listing_id: input.listingId,
+      p_amount_cents: input.amountCents,
+      p_message: input.message?.trim() || null,
+      p_parent_offer_id: input.parentOfferId ?? null,
     })
     .select(OFFER_SELECT)
     .single();
@@ -830,15 +820,12 @@ export async function offersOnMyListings(): Promise<OfferWithListing[]> {
 }
 
 export async function declineOffer(id: string) {
-  const { error } = await supabase.from('offers').update({ status: 'declined' }).eq('id', id);
+  const { error } = await supabase.rpc('set_offer_status', { p_offer_id: id, p_to: 'declined' });
   if (error) await fail(error);
 }
 
 export async function withdrawOffer(id: string) {
-  const { error } = await supabase
-    .from('offers')
-    .update({ status: 'withdrawn' })
-    .eq('id', id);
+  const { error } = await supabase.rpc('set_offer_status', { p_offer_id: id, p_to: 'withdrawn' });
   if (error) await fail(error);
 }
 
@@ -1239,4 +1226,83 @@ export async function adminSetSuspended(userId: string, suspended: boolean) {
     p_suspended: suspended,
   });
   if (error) await fail(error);
+}
+
+// ---------------------------------------------------------------- agent mandates
+
+export interface AgentMandate {
+  id: string;
+  owner_id: string;
+  listing_id: string;
+  side: 'buy' | 'sell';
+  bound_cents: number;
+  currency: 'USD';
+  expires_at: string;
+  max_rounds: number;
+  rounds_used: number;
+  status: 'draft' | 'approved' | 'revoked' | 'consumed';
+  listing_snapshot: Pick<Listing, 'id' | 'user_id' | 'type' | 'title' | 'description' | 'category_id' | 'event_date' | 'location'>;
+  draft_hash: string;
+  approved_at: string | null;
+  approved_by: string | null;
+  revoked_at: string | null;
+  consumed_at: string | null;
+  deal_id: string | null;
+  created_at: string;
+}
+
+/** Bounds remain private under owner-only RLS. */
+export async function myAgentMandates(listingId: string): Promise<AgentMandate[]> {
+  const session = await getSession();
+  if (!session) return [];
+  const { data, error } = await supabase.from('agent_mandates')
+    .select('*').eq('owner_id', session.user.id).eq('listing_id', listingId)
+    .order('created_at', { ascending: false }).limit(50);
+  if (error) await fail(error);
+  return (data ?? []) as AgentMandate[];
+}
+
+export async function createAgentMandateDraft(input: {
+  listingId: string; side: 'buy' | 'sell'; boundCents: number; expiresAt: string; maxRounds: number;
+}): Promise<AgentMandate> {
+  const { data, error } = await supabase.rpc('create_agent_mandate_draft', {
+    p_listing_id: input.listingId, p_side: input.side, p_bound_cents: input.boundCents,
+    p_expires_at: input.expiresAt, p_max_rounds: input.maxRounds,
+  }).single();
+  if (error) await fail(error);
+  return data as AgentMandate;
+}
+
+/** Only the signed-in human reviews this exact immutable draft hash. */
+export async function approveAgentMandate(draft: AgentMandate): Promise<AgentMandate> {
+  const { data, error } = await supabase.rpc('approve_agent_mandate', {
+    p_mandate_id: draft.id, p_expected_hash: draft.draft_hash,
+  }).single();
+  if (error) await fail(error);
+  return data as AgentMandate;
+}
+
+export async function revokeAgentMandate(id: string): Promise<AgentMandate> {
+  const { data, error } = await supabase.rpc('revoke_agent_mandate', { p_mandate_id: id }).single();
+  if (error) await fail(error);
+  return data as AgentMandate;
+}
+
+export interface AgentMandateAction {
+  id: string;
+  mandate_id: string;
+  action: 'place_offer' | 'accept_offer';
+  status: 'succeeded' | 'rejected';
+  explanation: string | null;
+  offer_id: string | null;
+  deal_id: string | null;
+  created_at: string;
+}
+
+export async function getAgentMandateActions(mandateId: string): Promise<AgentMandateAction[]> {
+  const { data, error } = await supabase.from('mandate_actions')
+    .select('id,mandate_id,action,status,explanation,offer_id,deal_id,created_at')
+    .eq('mandate_id', mandateId).order('created_at', { ascending: false }).limit(10);
+  if (error) await fail(error);
+  return (data ?? []) as AgentMandateAction[];
 }

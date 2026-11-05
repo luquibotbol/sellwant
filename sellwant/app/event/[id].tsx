@@ -4,6 +4,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Text, Card, Badge, Avatar, Button, Separator, ErrorState, EmptyState } from '@/components/ui';
 import OfferBoard from '@/components/OfferBoard';
 import PhotoCarousel from '@/components/PhotoCarousel';
+import MandatePanel from '@/components/MandatePanel';
 import { colors, space, radius, maxContentWidth } from '@/constants/theme';
 import { money } from '@/lib/format';
 import { useAsync } from '@/hooks/useAsync';
@@ -210,6 +211,10 @@ export default function ListingDetailScreen() {
           contact.reload();
         }}
       />
+
+      {process.env.EXPO_PUBLIC_AGENT_TRADING_ENABLED === 'true' && myId && (
+        <MandatePanel key={`${l.id}:${myId}`} listing={l} meId={myId} />
+      )}
 
       {/* Bubbl QRs are static -- the seller keeps a working copy after sending
           one. We can guarantee the code is unique here, not that it is safe, so
