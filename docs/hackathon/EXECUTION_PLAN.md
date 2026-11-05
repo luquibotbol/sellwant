@@ -1,6 +1,6 @@
 # SellWant × PayPal execution plan
 
-Authoritative tracker. Started October 28, updated October 29, 2026. Branch `hackathon/paypal-ai-2026`; baseline `618a3a01`. [Verified baseline and setup](BASELINE.md).
+Authoritative tracker. Started October 28, updated November 5, 2026. Branch `hackathon/paypal-ai-2026`; baseline `618a3a01`. [Verified baseline and setup](BASELINE.md).
 
 User's current request authorizes milestone implementation. Work one coherent milestone at a time. No production deployment, data modification or main push/merge. Preserve existing marketplace behavior. A milestone requiring a real external integration is incomplete until that integration is demonstrated.
 
@@ -9,12 +9,16 @@ User's current request authorizes milestone implementation. Work one coherent mi
 | Milestone | Target | Codex engineering estimate | Human setup/review, excluding waiting | Deliverable / checkpoint |
 |---|---|---|---|---|
 | M0 audit/baseline | Oct 29 (done) | 3–5 hours | 15–30 minutes | Architecture, baseline checks, official tooling research and this plan |
-| M1 payment feasibility | Oct 30 | 1–2 working days | 30–60 minutes sandbox setup and two buyer approvals | Isolated real create → approve → authorize → handoff → capture, plus independent authorize → void; verified exact receiver/price |
-| M2 persistent authorized trading | Nov 3 | 2–3 days | 30–60 minutes schema recovery/dev DB setup | Human-approved mandates, persistent public negotiation, atomic deal lock, authenticated product MCP |
+| M1 payment feasibility | Nov 4 (revised) | 1–2 working days | 30–60 minutes sandbox setup and two buyer approvals | Isolated real create → approve → authorize → handoff → capture, plus independent authorize → void; verified exact receiver/price |
+| M2 persistent authorized trading | Nov 5 (revised) | 2–3 days | 30–60 minutes schema recovery/dev DB setup | Human-approved mandates, persistent public negotiation, atomic deal lock, authenticated product MCP |
 | M3 useful AI and completed journey | Nov 8 | 3–4 days | 30–60 minutes provider/mail/demo review | LLM drafts reviewed mandates/proposes negotiation; durable watcher; integrated sandbox payment/handoff/cancel; outbox notifications |
 | M4 hardening and submission | Nov 11 | 2–3 days | 1–2 hours demo recording, account/judge access and submission | Two-user browser journey and void path, failure/concurrency hardening, video by Nov 10, submit Nov 11 |
 
 Feature freeze November 8. Official deadline November 12 at noon PST / 20:00 UTC; contingency only. [Official rules](https://paypalaihackathon.devpost.com/rules). Account-access waiting is separate from engineering estimates and can consume the schedule; escalate genuine access blockers early.
+
+November 3 replan: original M1/M2 targets were missed while access was unavailable. Revised dates require sandbox credentials and readable schema by November 4 and remain at risk until verified. Continue schema work independently of buyer approval; retain the core mandate/payment/handoff journey and defer the optional items below.
+
+November 5 direction: user permits parallel subagents for independent work and does not want schedule concerns to interrupt implementation. Dates above remain planning targets; continue testable milestones. Parallel work cannot replace human mandate/payment/handoff approval or missing account access. Schema and deal-boundary reviews ran independently during local setup; one owner coordinates core SQL changes.
 
 **Must have:** one approved buy/sell mandate each, public bounded offers, persistent lock, actual AI reasoning visible as proposals, sandbox buyer approval/authorization, physical handoff attestation, verified capture, cancellation/void/unlock, access/privacy tests, runnable demonstration.
 
@@ -122,10 +126,10 @@ States: planned = design only; implemented = code exists; verified = stated chec
 | M0 tooling and deadline research | Verified documentation | Official URLs/setup matrix; Codex local subcommands checked; no new account connection claimed |
 | M0 local baseline | Verified with limits | 87 offline tests, normalization/PNG checks, typecheck and placeholder web build pass; DB/browser/payment not run |
 | M1 adapter, harness and local safety checks | Verified locally; external gate still blocked | Server-only sandbox adapter, private resumable journal/lock, CLI; 33 payment tests, 120 total offline tests; pinned Bun 1.3.14 passes; typecheck/build evidence below |
-| M1 actual sandbox authorize/capture/void | Blocked | No PayPal app/merchant/buyer credentials available |
-| M2 database/prototype integration | Planned; dependencies missing | Need actual base schema and prototype source/commit, dev DB |
+| M1 actual sandbox authorize/capture/void | Partially verified; fresh buyer approvals required | Real OAuth, two $16.65 AUTHORIZE orders and exact amount/USD/payee/deal checks passed November 4. Both then required payer action. The capture-case order GET returned 404 on November 5; the second order was not reread in that failed sequence. No authorization/capture/void occurred. Create fresh orders when the buyer is ready; human approval and simulated test handoff remain required |
+| M2 database/prototype integration | In progress; local infrastructure verified | Recovered 56 functions and a 12-section catalog snapshot covering 11 tables/24 policies. Snapshot has lossy bigint precision and lacks required grants/dependencies. Local unlinked Supabase is healthy; corrected 17-section query passes locally. Exact hosted export, baseline restore/permission tests, prototype source and actual mandate/MCP implementation remain unfinished. Account access is proven; browser control is currently stopped |
 | M3 AI/watcher/notifications/full handoff | Planned | Follows M2 and provider/dev service access |
-| M4 hardened demo/submission | Planned | Feature freeze Nov 8; video Nov 10; submit Nov 11 |
+| M4 hardened demo/submission | Planned | End-to-end/concurrency/privacy checks, reproducible demo, video and submission remain; dates are planning targets, not a reason to stop implementation |
 
 ## M1 runbook and milestone evidence
 
@@ -159,6 +163,63 @@ All 17 task files were compared byte for byte with the stable verified checkout.
 **Verified:** typecheck; 33 focused tests on Bun 1.4.3; all 120 offline tests plus 13 normalization/mask and 5 decode/hash checks on exact Bun 1.3.14, in the stable checkout. The changed server module has no frontend imports or dependency changes; the prior web export remains packaging evidence. Real PayPal calls are still untested.
 
 **Access recheck:** no local credentials, no relevant populated environment names, no Supabase/PayPal development connector available, and no accessible prototype found through connected GitHub search or expected local paths. SQL history supplies no base schema. M1 still requires actual sandbox accounts; M2 still requires schema/dev access and prototype source. The active goal is not complete.
+
+### November 3 access and setup update
+
+**Existing:** Lucas's Supabase grant was previously unavailable to the user; this agent session had no database connection. **Changed:** user reports the grant is now available and can set up their own PayPal sandbox app. Supabase plugin discovery confirms it is available but not installed/connected; connecting it is the remaining account handoff before schema inspection. Inspect schema read-only first; account access alone does not verify database/RLS behavior or authorize production changes.
+
+Prepared `sellwant/.env.paypal-sandbox` from the example with empty values, mode 0600, and confirmed Git ignores it. User fills client ID, client secret and merchant ID locally, retaining `PAYPAL_ENVIRONMENT=SANDBOX`. No credentials or real transactions were available during this update. No product code changed; prior passing code checks remain the evidence above.
+
+**Quick PayPal setup:** use [Apps & Credentials](https://developer.paypal.com/api/rest/) in Sandbox mode; select/create a merchant app tied to a Business sandbox seller. Keep a separate Personal sandbox buyer from [Sandbox Accounts](https://developer.paypal.com/sandbox-testing/accounts). Find the seller's merchant ID by signing into `sandbox.paypal.com` as that Business account, then Account Settings → Business information → PayPal Merchant ID ([official instructions](https://developer.paypal.com/docs/multiparty/seller-onboarding/build-onboarding/)). Follow the existing runbook below after filling the local file. Lucas's PayPal account is not required for this isolated proof; arbitrary marketplace seller onboarding remains unverified.
+
+Optional provisioning check could not inspect the Stripe Projects catalog because its CLI login has expired; no service was provisioned and no unrelated account login is required for the direct PayPal setup above.
+
+### November 4 credential preparation
+
+User confirmed sandbox seller/buyer accounts and supplied a client ID. Saved it in the private ignored env file; retained empty client-secret and merchant-ID fields for the user to fill locally. The supplied merchant-ID value contained password-like punctuation and was not saved as an ID. Account login passwords belong in the user's password manager and are not required by the server API. Verified file permissions 0600, Git exclusion and the two remaining empty fields; no provider calls or production writes occurred.
+
+Supabase plugin discovery now confirms installation. User reports the connection is complete; actual database access remains unverified because no Supabase tools are exposed in this session yet. This supersedes the earlier uninstalled state; do not ask the user to install it again.
+
+### November 4 real sandbox order checkpoint
+
+**Existing:** local adapter/session tests passed but no provider credentials had been exercised. **Changed:** user filled all four local configuration fields. The local check passed; real OAuth and two order-create requests succeeded. Both orders were independently fetched and passed strict expected deal, amount, USD, AUTHORIZE intent and seller merchant checks. Repeating create on the first journal returned the same order ID rather than creating another. Private credentials and operation journals remain Git-ignored; credential file mode is 0600.
+
+| Synthetic case | Provider order ID | Exact amount | Last verified provider status |
+|---|---|---|---|
+| `demo-capture-20261104-01` | `51V273657C331094L` | 1665 cents USD | `PAYER_ACTION_REQUIRED` |
+| `demo-void-20261104-01` | `6TM7967596914393U` | 1665 cents USD | `PAYER_ACTION_REQUIRED` |
+
+**Verified checks in the original checkout:** `bun run typecheck`; 120 offline tests, 0 failures, 420 assertions on installed Bun 1.4.3; 33 focused PayPal tests, 0 failures. An actual capture command before test handoff was rejected locally as expected. This supplements the earlier pinned Bun 1.3.14 evidence; hosted CI and product browser/database tests remain unrun.
+
+Initial restricted-network OAuth and local callback binding attempts failed; approved host-network runs succeeded. Read-only callback is listening on `127.0.0.1:8789`. No authorization, capture or void has occurred. Buyer approval links were provided to the user; the separate Personal sandbox buyer must approve each order. A human must then confirm a simulated handoff for the isolated capture proof. Do not mark M1 complete until authorization/capture and authorization/void are actually verified. Do not interpret the callback as financial completion.
+
+**Supabase recheck:** no callable Supabase tools are available in this session and local Codex has zero Supabase servers. A focused browser visit to the existing hosted project reached the sign-in page. The user's account grant/setup report is retained, but schema access has not been demonstrated. No production queries or writes occurred.
+
+### November 4 schema recovery checkpoint
+
+**Access verified:** the existing signed-in Brave profile can open the configured hosted project (dashboard name `sellup`, reference matches the app). A public REST-schema request returned HTTP 401; no API schema was recovered that way. Browser SQL Editor successfully ran a SELECT against `pg_catalog.pg_proc`/`pg_namespace` using built-in definition readers only. No application RPC or production data mutation was executed. SQL Editor automatically created a private query snippet.
+
+**Recovered:** 56 public function definitions, including `accept_offer(p_offer_id uuid) RETURNS uuid` and `advance_deal(p_lock_in_id uuid, p_to text) RETURNS lock_ins`. The CSV is saved in the project root as `Supabase Snippet Untitled query.csv`, with an identical working copy at `sellwant/.local/schema/live-public-functions-20261104.csv`. Verified all 56 rows and both RPCs, byte-identical copies, mode 0600 and Git exclusion. The export includes extension functions and is not a complete runnable database baseline.
+
+`accept_offer` checks open offer, listing owner and active listing, locks the listing, inserts the lock-in and relies on a trigger for other-offer/listing transitions. `advance_deal` locks the deal, checks participant roles and restricts paid/confirmed transitions to the buyer; its legacy paid/confirmed states do not verify PayPal. Recover the referenced triggers, table definitions, grants and RLS before changing these contracts or creating the sandbox payment association.
+
+**Remaining recovery:** table/enum/constraint/index/trigger/policy/grant metadata and extension ownership. Isolated database is not ready: the Docker client exists but its initial server check could not connect to a daemon. Supabase account access is no longer the schema-inspection blocker; do not ask the user to reinstall or re-grant it based solely on absent agent tools. PayPal orders still awaited buyer action at the latest provider read; the user's instruction to continue did not change those provider statuses.
+
+### November 5 local database and parallel review checkpoint
+
+**What existed:** exported functions and incremental migrations, but no reproducible base schema or running local database. **Changed:** pinned Supabase CLI 3.0.0 in the app's dev dependencies; added local start/stop/status scripts and `supabase/config.toml` for project `sellwant-paypal-ai-2026`. API uses 55321, PostgreSQL 55322 and local mail 55324. No hosted project is linked. Automatic migrations/seeds are disabled because the checked-in patches lack the base schema and have duplicate date versions. Optional Studio, postgres-meta, analytics and Edge Runtime are excluded/disabled.
+
+Docker's initial startup failed because the VM disk was full. Removed only this task's unused Studio/postgres-meta images, then trimmed unused build cache with `docker builder prune --force --keep-storage 15GB`; no other application images, containers or volumes were removed. A subsequent filesystem check showed 3.2 GB available. Retried startup successfully: database, auth, gateway, storage, realtime and local mail report healthy; REST is running. PostgreSQL reports 17.11. Public application tables are still absent: this proves local infrastructure, not schema recovery or product integration.
+
+**Recovered metadata:** private project-root `SellWant Schema Metadata 20261104.csv` contains 12 sections: 11 tables, 83 columns, 52 constraints, 31 indexes, six triggers and 24 policies. All exported tables enable RLS; enforcement has not been tested. The 56 functions include 25 application routines and 31 extension-owned pg_trgm routines. Install the extension rather than replaying its routines. Browser JSON conversion rounded a bigint sequence maximum beyond int64 range, and the snapshot lacks column grants, sequence grants/ownership, auth signup trigger, storage configuration and exact hosted version. Do not restore from this incomplete snapshot or infer the missing values.
+
+`scripts/inspect-schema.sql` now exports 17 sections, returning JSON as text to preserve integer precision. It includes the missing ACL/dependency/version fields, app-owned auth.users triggers, storage policies and only listing-photos bucket configuration (no object contents). The full query passed against local PostgreSQL with `default_transaction_read_only=on`; all sections parse. It has not yet run against the hosted project. Existing schema CSVs stay mode 0600 and Git-ignored in the project directory. Browser control was explicitly stopped, so exact hosted recovery requires it to be re-enabled or a manually downloaded result of this query; no cookie/token workaround is used.
+
+**Checks:** frozen lockfile install (1,017 packages), typecheck and 120 offline tests/420 assertions passed in the stable copy `/private/tmp/sellwant-recovery-20261104/source/sellwant`, built from current HEAD plus current package/lock/config/query changes. The earlier October verification directory no longer exists. Local startup/status, container health, read-only query parsing and Git whitespace checks passed. Shared-database tests, baseline restore, browser journeys, live capture/void, LLM and notifications remain unverified.
+
+**Parallel source review:** existing direct buy-now accepts client price/state without equivalent policy checks; offer acceptance rejects cancelled deal history despite listing reopening; offer status is read before acquiring the listing lock. `cancel_listing` has PUBLIC execution and a nullable ownership comparison without an explicit null-UID rejection. These are source-level defects/risks, not hosted exploit tests. Reproduce only after isolated baseline recovery, then fix and test alongside role checks, cancellation/reaccept, concurrency and sandbox bypass guards. Keep existing manual callers compatible.
+
+**Next gate:** export exact hosted metadata, restore/compare the isolated baseline and test its permissions before modifying core RPCs. Lucas's prototype source/commit and LLM provider remain unavailable. M1 still needs fresh human buyer approvals and actual authorization/capture/void; M2–M4 remain unfinished. Parallel review does not mark these milestones complete.
 
 ### Try the isolated proof
 
@@ -210,4 +271,4 @@ bun --env-file=.env.paypal-sandbox run paypal:sandbox status --deal-id demo-void
 
 Expected state: `voided`, uncaptured. Repeat authorize/capture/status or void on the corresponding completed journals to demonstrate no second financial mutation. The harness caps synthetic amounts at $100; this is not a marketplace limit. Private journals are in `sellwant/.local/paypal-sandbox/`. Preserve them after errors. Unknown capture blocks void; use status/provider dashboard for reconciliation. Do not retry an unknown create beyond its 5-hour local safety window. A stale file lock after a killed process requires checking the provider outcome before manually removing that exact lock; never delete journals as cleanup.
 
-**Remaining M1 gate:** obtain sandbox access, run both real paths, record sanitized IDs/statuses and the seller account model. M1 remains incomplete until then. Next substantial milestone is M2; schema export and Lucas's prototype are needed before adapting persistence/auth/RPC contracts.
+**Remaining M1 gate:** sandbox API access is verified; obtain fresh human buyer approvals, run both real financial paths, and record sanitized IDs/statuses and the seller account model. M1 remains incomplete until then. M2 is underway at schema/local infrastructure preparation; exact schema recovery and Lucas's prototype are needed before adapting persistence/auth/RPC contracts.

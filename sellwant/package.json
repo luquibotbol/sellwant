@@ -18,7 +18,10 @@
     "build": "expo export -p web",
     "deploy": "expo export -p web && wrangler deploy",
     "deploy:dry": "expo export -p web && wrangler deploy --dry-run",
-    "test:unit": "bun test tests/handoff.test.ts"
+    "test:unit": "bun test tests/handoff.test.ts",
+    "db:local:start": "supabase start --exclude studio,postgres-meta",
+    "db:local:stop": "supabase stop",
+    "db:local:status": "supabase status"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",
@@ -68,6 +71,7 @@
     "@types/react": "~18.3.12",
     "pngjs": "^7.0.0",
     "qrcode": "^1.5.4",
+    "supabase": "3.0.0",
     "typescript": "~5.3.3",
     "wrangler": "4.123.0"
   },

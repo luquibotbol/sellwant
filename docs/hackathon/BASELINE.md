@@ -74,6 +74,14 @@ Dependency recheck, October 29: no local PayPal/Supabase configuration or releva
 
 ## Tooling: keep the boundaries clear
 
+### November 5 verified changes
+
+The hosted dashboard grant is verified: read-only exports recovered 56 public functions (25 app/31 pg_trgm) and metadata for 11 RLS-enabled tables, 83 columns, 52 constraints and 24 policies. Private CSVs are saved in the project root and ignored. This is not a complete baseline: the metadata export rounded bigint values and lacks grants/dependencies needed for faithful recovery. The corrected `sellwant/scripts/inspect-schema.sql` exports 17 lossless-text sections, including column/sequence ACLs, sequence ownership, server version, app signup triggers, storage policies and listing-photos bucket config. It passes locally; hosted re-export is still required. No production application data was changed.
+
+Supabase CLI 3.0.0 is now pinned in the app. Local-only, unlinked config and start/stop/status scripts exist; automatic legacy migrations/seeds are disabled. After resolving Docker disk exhaustion with scoped image/cache cleanup, the local PostgreSQL 17.11/Auth/REST/Storage stack is healthy on API 55321/DB 55322. No public application tables are restored yet. The latest stable verification copy is `/private/tmp/sellwant-recovery-20261104/source/sellwant`: frozen install, typecheck, 120 offline tests/420 assertions and read-only catalog query passed. Historical audit results above retain their original dates; current progress and remaining gates are in the execution tracker.
+
+PayPal OAuth and two exact-value sandbox order creations/readbacks succeeded November 4. Buyer approval, authorization, handoff, capture and void remain incomplete; the first order returned 404 at the November 5 recheck. Product mandates/MCP/AI/watcher/payment UI remain unimplemented. User authorizes parallel subagents; schema completeness and core deal compatibility were reviewed without production writes.
+
 A **skill** supplies engineering instructions. A **development MCP** gives Codex service access. The **product MCP** is SellWant's own authenticated agent API. Runtime REST/SDK calls, cron, Resend, Git and Postgres are ordinary tools; MCP is not required for each one.
 
 Minimum combination: existing project/OpenAI instructions, Bun/TypeScript, native PayPal REST calls, existing Supabase client/database and Worker/Resend infrastructure. No extra account-connected development MCP is required for the first transaction. Add scoped read-only Supabase MCP when schema access is supplied; Playwright or the existing browser tool is needed for the real two-user journey. PayPal/Cloudflare plugins remain optional.

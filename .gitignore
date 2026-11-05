@@ -10,3 +10,7 @@ node_modules
 # generated QR fixtures
 test-qr/
 dist/
+
+# Local Supabase schema export
+/Supabase Snippet Untitled query.csv
+/SellWant Schema Metadata *.csv
