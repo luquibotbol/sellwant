@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify source baseline -> 001 -> 002 -> 003 in an owned disposable database.
+"""Verify source baseline -> 001 -> 002 -> 003 -> 004 in an owned disposable database.
 
 Uses only the fixed local container verified by schema-baseline-local.py. Copies
 schema, never rows or role/global definitions. The working postgres database is
@@ -28,6 +28,7 @@ MIGRATIONS = (
     '202611050001_core_trade_authorization.sql',
     '202611050002_agent_mandates.sql',
     '202611050003_agent_privacy.sql',
+    '202611050004_agent_access_context.sql',
 )
 
 
@@ -171,7 +172,7 @@ def main():
         report.update({'baseline_compare': 'passed', 'effective_privilege_checks': privileges['checks'],
                        'ordered_migrations': list(MIGRATIONS), 'final_catalog_match': True,
                        'app_functions_compared': len(after['app_functions'])})
-        print('Ordered baseline + 001/002/003 matches working app catalog and all '
+        print('Ordered baseline + 001/002/003/004 matches working app catalog and all '
               + str(len(after['app_functions'])) + ' app function definitions.')
     except BaseException as error:
         failure = error

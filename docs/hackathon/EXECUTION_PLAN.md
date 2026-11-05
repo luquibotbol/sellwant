@@ -2,6 +2,8 @@
 
 Authoritative tracker. Started October 28, updated November 5, 2026. Branch `hackathon/paypal-ai-2026`; baseline `618a3a01`. [Verified baseline and setup](BASELINE.md).
 
+**Latest user clarification:** this repository is Lucas's handoff. No separate prototype repository is required; implement the missing product MCP here using the verified persistent trading boundaries. Earlier notes requesting a separate prototype are superseded. Private `sellwant/.env.llm` now exists (0600, Git-ignored). The user supplied an OpenAI key there; a read-only model-access request returned HTTP 200 and confirmed available candidates. Model selection/text generation and deployed secret configuration are not yet verified. The PayPal void checkout was approved, authorized and voided successfully; the capture checkout still awaits buyer approval and later explicit simulated handoff.
+
 User's current request authorizes milestone implementation. Work one coherent milestone at a time. No production deployment, data modification or main push/merge. Preserve existing marketplace behavior. A milestone requiring a real external integration is incomplete until that integration is demonstrated.
 
 ## Scope and schedule
@@ -38,7 +40,7 @@ Seller mandates must refer to their owned listing; buyer scope pins the intended
 
 ### Product MCP and persistence
 
-Inspect Lucas's prototype before deciding its adaptation. Reported tools are unverified: `search_listings`, `get_going_rate`, `get_deal`, `create_mandate`, `place_offer`, `auto_trade`, `advance_deal`, `revoke_mandate`, `draft_paypal_order`. In-memory offers/deals, if confirmed, must become database operations. A draft payment tool must never claim payment happened.
+The user clarified that this repository is Lucas's handoff. Implement product MCP here against the verified persistent database contract. Previously reported prototype tools remain unverified leads, not an extra repository dependency. Expose scoped read/offer/accept/revoke plus public active discovery; human approvals, payment and handoff transitions stay outside agent authority. A draft payment tool must never claim payment happened.
 
 Proposed Worker `/mcp`: official SDK Streamable HTTP, stateless transport with database persistence. Register route before static assets. [Cloudflare remote MCP guidance](https://developers.cloudflare.com/agents/model-context-protocol/guides/remote-mcp-server/). No Durable Object/framework requirement merely to expose tools. Inspect library compatibility with Worker build before adding dependencies.
 
@@ -126,9 +128,9 @@ States: planned = design only; implemented = code exists; verified = stated chec
 | M0 tooling and deadline research | Verified documentation | Official URLs/setup matrix; Codex local subcommands checked; no new account connection claimed |
 | M0 local baseline | Verified with limits | 87 offline tests, normalization/PNG checks, typecheck and placeholder web build pass; DB/browser/payment not run |
 | M1 adapter, harness and local safety checks | Verified locally; external gate still blocked | Server-only sandbox adapter, private resumable journal/lock, CLI; 33 payment tests, 120 total offline tests; pinned Bun 1.3.14 passes; typecheck/build evidence below |
-| M1 actual sandbox authorize/capture/void | Partially verified; PayPal buyer approval still required | Both November 4 orders now return 404. Fresh November 5 synthetic $16.65 orders created and strictly verified; provider approval checks still reject authorization pending buyer action. Chat approval authorizes continuing the test but does not establish PayPal approval or test handoff. No authorization/capture/void is claimed |
-| M2 database/prototype integration | Baseline/core/mandates verified locally; access UI implemented; MCP/browser incomplete | Recovered app schema/grants and 25 definitions compared; 1,452 pre-fix permission checks passed. Three explicit platform extension-owner differences only. Persistent bounded trading passes 42 core and 65 mandate SQL/REST cases. Human token issuance/revocation, private paginated mandates/access metadata and auth-cache teardown are implemented; 42 access REST groups and 39 privacy checks pass. Additional privacy regression/fix evidence follows below. UI remains disabled by default and browser-unverified. Lucas's prototype is still missing; no MCP transport is claimed |
-| M3 AI/watcher/notifications/full handoff | Planned; market input foundation implemented | Public cursor discovery and bounded market reader verified offline. No actual LLM, durable watcher, notification extension or integrated financial/handoff journey yet; follows M2 and provider/dev service access |
+| M1 actual sandbox authorize/capture/void | Authorize/void verified; capture path pending buyer approval | November 5 void order `21V19307KS044112F` authorized as `14F6288189074490Y` for 1665 cents/USD, then provider-confirmed VOIDED; repeat void reconciles the same result. Capture order `0M315443YG505872E` still rejects pending buyer approval. No handoff/capture is claimed |
+| M2 database/prototype integration | Database and MCP verified locally; human browser journey incomplete | Existing 42 core, 65 mandate, 42 REST and 39 privacy checks pass. New capability context passes 55 real SQL/REST checks; official MCP client passes 26 real Worker/PostgREST groups including public offer discovery, counter/accept, restart/idempotency and revocation. All four migrations replay to 46 identical app definitions. Typecheck, 230 offline tests and isolated Worker dry-run pass. Human review UI remains disabled by default and browser-unverified; hosted MCP/client compatibility remains unverified. No separate Lucas repository is required |
+| M3 AI/watcher/notifications/full handoff | Planned; market input foundation and OpenAI credential access verified | Public cursor discovery and MCP public offer/rate reads are implemented. OpenAI model-list authentication returned HTTP 200 with the user's private key. No model-generated proposal, durable watcher, notification extension or integrated financial/handoff journey yet |
 | M4 hardened demo/submission | Planned | End-to-end/concurrency/privacy checks, reproducible demo, video and submission remain; dates are planning targets, not a reason to stop implementation |
 
 ## M1 runbook and milestone evidence
@@ -269,12 +271,15 @@ python3 scripts/schema-baseline-local.py permissions
 bun scripts/test-core-local.ts --expect fixed --apply-core --rest
 python3 scripts/test-mandates-local.py --apply
 python3 scripts/test-privacy-local.py --apply
+python3 scripts/test-agent-access-local.py --apply
 
 # Subsequent verification of the migrated local database:
 bun scripts/test-core-local.ts --expect fixed --rest
 python3 scripts/test-mandates-local.py
 python3 scripts/test-mandates-rest-local.py
 python3 scripts/test-privacy-local.py
+python3 scripts/test-agent-access-local.py
+python3 scripts/test-mcp-local.py
 bun run typecheck
 bun run test:offline
 
@@ -308,7 +313,19 @@ The privacy follow-up had been applied incrementally during development. `script
 
 This verifies application replay on the current local platform schemas/shared roles, not a fresh Supabase service bootstrap or source PostgreSQL 17.6 equivalence. No browser, MCP, model or real payment completion is implied. Both existing PayPal authorization checks still return “Buyer must approve the PayPal order first.” Expected local MCP prototype paths remain absent; the requested source/commit and provider/model/access are still required. No replacement orders or production changes occurred.
 
+### November 5 in-repository MCP checkpoint
+
+The user clarified this repository is the handoff; the separate prototype gate is removed. `/mcp` now uses the official split TypeScript SDK 2.4.0 stateless Web Standard transport, pinned with its matching client and Zod. It is disabled by default, rejects the known production origin/database, authenticates each request through the new minimal `agent_get_access` RPC and uses only the public Supabase key for transport. Exact origin/host checks, strict schemas, streamed request/upstream/response limits, secret redaction and generic errors protect the boundary. Upstream outages remain 503 instead of being mislabeled invalid credentials. No service-role key enters this route.
+
+Only granted private read/offer/accept/revoke tools are advertised. All valid capabilities can discover active listings, exact going rates/no-offer state and open public offer IDs. Offer pages have exact counts and stable listing-bound cursors, omit author IDs and private fields, and disappear from public discovery when a listing locks. The real proof discovers counter/accept targets through that tool, rather than sharing IDs privately between clients. Operation UUIDs remain stable across retries; an unknown mutation preserves its UUID and requires reconciliation. Human approval/payment/handoff actions are not exposed.
+
+**Verified:** 55 actual local access-context SQL/REST checks, including each single scope, expiry/revocation/suspension and confirmed lock waits; 26 official SDK-client → loopback Worker → real PostgREST groups, including public pagination, bounded offer/counter/accept, restart persistence, idempotency, participant-only deal reads and next-request revocation. The first pagination assertion used a replaced same-bidder offer; it was corrected to two independent bidders, with no ACL/Worker relaxation. All owned fixtures were cleaned. The four whole migrations reproduce all 46 app definitions and baseline 1,452 grants in a disposable database; the original catalog is unchanged. Typecheck and 230 offline tests/1,662 assertions pass. A clean isolated Wrangler dry-run compiled 729.44 KiB / gzip 149.11 KiB without bindings or deployment. The local launcher returned 401 without a capability, exited cleanly on Ctrl-C and its listener was confirmed closed.
+
+**Try:** run `python3 scripts/test-mcp-local.py` for the isolated synthetic proof, or `python3 scripts/mcp-local-server.py` to start a loopback endpoint. Supply a human-issued mandate capability as a Streamable HTTP client's Bearer header. [Contract and commands](AGENT_CONTRACT.md). General OAuth, hosted external clients and human browser mandate approval remain unverified. OpenAI key authentication is verified only by a read-only model-list request; no model generation, durable watcher or integrated payment/handoff is claimed. The capture order still needs buyer checkout approval and a later explicit simulated handoff.
+
 ### Try the isolated proof
+
+**Latest real payment result:** the user's `/return` screenshot is the expected read-only callback, not a checkout error. For void-test order `21V19307KS044112F`, backend authorization succeeded as `14F6288189074490Y` for exactly 1665 cents/USD and the configured sandbox seller. Void was confirmed by provider readback; repeating void retained the same VOIDED authorization with no capture or handoff. Capture-test order `0M315443YG505872E` still reports buyer approval required. The separate explicit simulated handoff remains mandatory after that order is authorized.
 
 Run from `sellwant/`, preferably a fully downloaded checkout outside iCloud. Copy `.env.paypal-sandbox.example` to `.env.paypal-sandbox` and fill the four variables using the **synthetic seller's business sandbox app** and merchant ID. Keep the separate synthetic buyer login ready. No secrets in chat, Git or frontend variables.
 
@@ -358,4 +375,4 @@ bun --env-file=.env.paypal-sandbox run paypal:sandbox status --deal-id demo-void
 
 Expected state: `voided`, uncaptured. Repeat authorize/capture/status or void on the corresponding completed journals to demonstrate no second financial mutation. The harness caps synthetic amounts at $100; this is not a marketplace limit. Private journals are in `sellwant/.local/paypal-sandbox/`. Preserve them after errors. Unknown capture blocks void; use status/provider dashboard for reconciliation. Do not retry an unknown create beyond its 5-hour local safety window. A stale file lock after a killed process requires checking the provider outcome before manually removing that exact lock; never delete journals as cleanup.
 
-**Remaining M1 gate:** sandbox API access is verified; obtain actual human buyer approvals, run both real financial paths, and record sanitized IDs/statuses and the seller account model. Generate replacement links only when the buyer is available. M1 remains incomplete until then. M2 has a verified recovered database and persistent bounded trading; product MCP adaptation still requires Lucas's prototype/source commit. Browser validation remains unverified while browser control is stopped.
+**Remaining M1 gate:** sandbox authorization/void are verified. The separate capture order still requires buyer approval, backend authorization, explicit simulated handoff and provider-confirmed capture. Generate replacement links only when the buyer is available. M1 remains incomplete until capture is proven. M2 has a verified recovered database and persistent bounded trading; product MCP is being implemented in this repository following the user's handoff clarification. Browser validation remains unverified while browser control is stopped.

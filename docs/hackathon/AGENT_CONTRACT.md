@@ -1,8 +1,10 @@
 # Mandate integration contract
 
-This is the persistent database contract for adapting Lucas's prototype. No
-product MCP transport or LLM runtime is implemented or claimed here. Use only
-the migrated isolated development database and synthetic users for testing.
+This is the persistent database contract and in-repository MCP integration.
+The user clarified that this repository is Lucas's handoff; no separate
+prototype is required. Use only the migrated isolated development database and
+synthetic users for testing. LLM runtime, durable watching and browser approval
+verification remain separate work.
 
 ## Human controls
 
@@ -43,8 +45,23 @@ to expose subsequent pages, including older approved mandates.
 
 ## Agent boundary
 
-A capability is scoped to one mandate and is **not** a Supabase JWT. The future
-MCP adapter must pass it as `p_token` to the following RPCs, using the public
+The Worker exposes `/mcp` using the official SDK's stateless Web Standard
+transport. It is disabled unless `AGENT_MCP_ENABLED=true`, and requires the exact
+`AGENT_MCP_ORIGIN` plus isolated `SUPABASE_URL`/`SUPABASE_ANON_KEY`. The known
+production origin/database are rejected. Each HTTP request authenticates
+`Authorization: Bearer <capability>` through `agent_get_access(p_token)`; only
+`{id,mandate_id,tools,expires_at}` is returned. This context grants no new tool
+scope or private mandate read. Revocation, expiry and suspension revalidate on
+later requests and inside the existing action RPCs.
+
+Use a Streamable HTTP client that can supply the Bearer header. General OAuth
+discovery is not implemented. Request origins/hosts, input sizes and strict
+tool schemas are checked; credentials and SQL errors are not reflected in
+responses. A client must persist each mutation's operation UUID and unchanged
+payload. An unknown result retains that UUID and requires reconciliation.
+
+A capability is scoped to one mandate and is **not** a Supabase JWT. The MCP
+transport passes it as `p_token` to the following RPCs, using the public
 Supabase anon key for transport. It must never hold database administration
 credentials or let an external agent call human approval/payment/handoff RPCs.
 Do not embed the capability in URLs, log request bodies or return it from tools.
@@ -56,6 +73,28 @@ Do not embed the capability in URLs, log request bodies or return it from tools.
 | `place_offer` | `agent_mandate_action` with `p_action='place_offer'` |
 | `accept_offer` | `agent_mandate_action` with `p_action='accept_offer'` |
 | `revoke_mandate` | `agent_revoke_mandate(p_token)`; returns only `{id,status:'revoked'}`, without private terms |
+
+All valid capabilities also receive these public read tools. Responses never
+include contacts, account IDs, mandate bounds or inactive offer prices.
+
+| MCP tool | Public result |
+|---|---|
+| `search_listings` | Bounded active listing batch, optional title/type filters, `complete` and `next_cursor` |
+| `get_going_rate` | Active listing's exact cents or explicit `no_offers`; incomplete scans return continuation rather than claiming absence |
+| `get_public_offers` | Open offer IDs, listing/parent IDs, cents, message/time and `is_poster` for one active listing; stable listing-bound cursor |
+
+`get_public_offers` takes `listing_id`, optional `page_size` (1–100) and optional
+`cursor`. This lets an agent discover the actual IDs needed to counter or
+accept. Only open offers on active listings are readable. The listing-owner
+role is a boolean; underlying account IDs are not returned. Public upstream
+JSON is streamed with byte bounds before parsing; exact counts prevent a
+short PostgREST page from falsely ending discovery.
+
+MCP mutation tools require `operation_key`; receipt/error results are JSON text
+and `structuredContent.result`. Revoke returns only id/status plus the supplied
+correlation key. A revoked token cannot authenticate a receipt retry, so an
+unknown revoke outcome requires owner review. No agent tool approves human
+terms, advances handoff, authorizes PayPal or captures payment.
 
 `agent_mandate_action` takes a required UUID `p_operation_key` and optional
 `p_amount_cents`, `p_offer_id`, `p_parent_offer_id`, `p_message`, `p_explanation`,
@@ -94,10 +133,32 @@ bun scripts/test-core-local.ts --expect fixed --rest
 python3 scripts/test-mandates-local.py
 python3 scripts/test-mandates-rest-local.py
 python3 scripts/test-privacy-local.py
+python3 scripts/test-agent-access-local.py
+python3 scripts/test-mcp-local.py
 bun run typecheck
 bun run test:offline
 ```
 
-These fixture checks exercise actual local PostgreSQL/PostgREST. They simulate
-human principals; they do not approve real user mandates. Browser interaction,
-external MCP interoperability and actual model calls require separate evidence.
+To connect a client to an isolated local endpoint:
+
+```sh
+python3 scripts/mcp-local-server.py
+```
+
+The launcher validates the fixed local Supabase project and prints a loopback
+MCP endpoint. Create a capability through the human mandate panel and supply it
+as the client's Bearer token. The launcher does not create/approve mandates,
+start a model or deploy a watcher. Stop it with Ctrl-C.
+
+These fixture checks exercise actual local PostgreSQL/PostgREST and an official
+MCP client across a loopback Worker process restart. They simulate human
+principals; they do not approve real user mandates. Browser interaction,
+hosted external-client compatibility and actual model calls require separate
+evidence.
+
+Verified locally: 55 real access-context SQL/REST checks; 26 actual official
+SDK-client/Worker/PostgREST groups, including public offer discovery, bounded
+counter/accept, process restart, idempotency and revoked-read denial; 230 offline
+tests; typecheck; and an isolated Worker dry-run. All owned SQL fixtures and
+child listeners were cleaned. The local launcher was started, returned 401
+without a capability, and stopped with its listener confirmed closed.

@@ -16,6 +16,8 @@
  * This script only runs when no asset matched, so the common path costs nothing.
  */
 
+import { handleMcp } from './mcp';
+
 /** URL prefix -> the file Expo actually emitted for it. */
 const DYNAMIC = {
   deal: '/deal/[id].html',
@@ -476,7 +478,28 @@ function exactListingCount(range, received) {
   return total;
 }
 
-async function fetchActivePage(env, { limit, cursor }) {
+async function boundedPublicJson(response, maximumBytes) {
+  if (maximumBytes === undefined) return response.json();
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Missing public database body');
+  const chunks = [];
+  let length = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > maximumBytes) { await reader.cancel(); throw new Error('Oversized public database body'); }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+}
+
+async function fetchActivePage(env, { limit, cursor }, maximumBytes) {
   if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) throw new Error('Missing public database configuration');
   const endpoint = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/listings`);
   if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) {
@@ -495,10 +518,11 @@ async function fetchActivePage(env, { limit, cursor }) {
   }
   const res = await fetch(endpoint.toString(), {
     headers: { apikey: env.SUPABASE_ANON_KEY, Prefer: 'count=exact' },
+    credentials: 'omit', redirect: 'error', cache: 'no-store',
     signal: AbortSignal.timeout(3000),
   });
   if (!res.ok) throw new Error('Public database request failed');
-  const rows = await res.json();
+  const rows = await boundedPublicJson(res, maximumBytes);
   if (!Array.isArray(rows) || rows.length > limit + 1 || !rows.every(validPublicListing) ||
       new Set(rows.map(row => row.id)).size !== rows.length ||
       rows.some((row, index) => {
@@ -513,7 +537,7 @@ async function fetchActivePage(env, { limit, cursor }) {
 }
 
 /** Public, active-only discovery. No successful empty market on upstream failure. */
-async function listingsJson(request, env, url) {
+async function listingsJson(request, env, url, options = {}) {
   const respond = (data, status = 200, extraHeaders = {}) => new Response(
     request.method === 'HEAD' ? null : JSON.stringify(data, null, 2),
     { status, headers: {
@@ -534,7 +558,7 @@ async function listingsJson(request, env, url) {
   }
   let fetched;
   try {
-    fetched = await fetchActivePage(env, pagination);
+    fetched = await fetchActivePage(env, pagination, options.maximumBytes);
   } catch {
     return respond({ error: 'market_unavailable', message: 'Active listings are temporarily unavailable. Retry this page.' }, 503);
   }
@@ -1062,6 +1086,10 @@ async function unsubscribe(request, env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    // Authenticate before redirects/assets; a capability is never forwarded to
+    // another host or the static asset service. Disabled unless explicitly set.
+    if (url.pathname === '/mcp') return handleMcp(request, env, listingsJson);
 
     // One canonical host. Serving the app on both www and the apex would split
     // every shared link between two URLs, and -- more concretely -- Supabase's
