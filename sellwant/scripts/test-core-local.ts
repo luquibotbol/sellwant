@@ -264,6 +264,11 @@ async function cleanupFixture(f: Fixture) {
         OR (SELECT count(*) FROM auth.users WHERE id IN (${f.users.map(x => `'${x}'`).join(',')}) AND email LIKE '${f.marker}-%@example.edu')<>3
       THEN RAISE EXCEPTION 'Fixture ownership mismatch; refusing cleanup'; END IF;
     END $owner$;
+    DO $outbox$ BEGIN
+      IF to_regclass('public.email_outbox') IS NOT NULL THEN
+        DELETE FROM public.email_outbox WHERE listing_id='${f.listing}';
+      END IF;
+    END $outbox$;
     DELETE FROM public.listings WHERE id='${f.listing}';
     DELETE FROM auth.users WHERE id IN (${f.users.map(x => `'${x}'`).join(',')}); COMMIT;`);
 }

@@ -45,7 +45,8 @@ export function fakePayPal() {
     const value = orderFixture();
     value.status = state.authorized ? 'COMPLETED' : state.approved ? 'APPROVED' : 'PAYER_ACTION_REQUIRED';
     value.purchase_units[0].payments = {
-      ...(state.authorized ? { authorizations: [{ id: authorizationId, amount: { ...money }, status: state.authorizationStatus }] } : {}),
+      ...(state.authorized ? { authorizations: [{ id: authorizationId, amount: { ...money }, status: state.authorizationStatus,
+        expiration_time:new Date(Date.now()+24*60*60*1000).toISOString() }] } : {}),
       ...(state.captured ? { captures: [{ ...captureFixture(), status: state.captureStatus }] } : {}),
     };
     return value;
@@ -68,7 +69,8 @@ export function fakePayPal() {
       return response(order(), 201);
     }
     if (url.endsWith(`/authorizations/${authorizationId}`) && init.method === 'GET') {
-      return response({ id: authorizationId, status: state.authorizationStatus, amount: { ...money } });
+      return response({ id: authorizationId, status: state.authorizationStatus, amount: { ...money },
+        expiration_time:new Date(Date.now()+24*60*60*1000).toISOString() });
     }
     if (url.endsWith(`/authorizations/${authorizationId}/capture`)) {
       state.captureCalls++; state.captured = true; state.authorizationStatus = 'CAPTURED';

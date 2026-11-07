@@ -7,6 +7,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { money } from '@/lib/format';
 import { mandateBoundCents, mandatePositiveInteger } from '@/lib/mandates';
 import AgentAccess from '@/components/AgentAccess';
+import AgentDraft, { AgentWatchControl } from '@/components/AgentDraft';
 import {
   AgentMandate, Listing, myAgentMandates, createAgentMandateDraft,
   approveAgentMandate, revokeAgentMandate, getAgentMandateActions,
@@ -143,6 +144,7 @@ export default function MandatePanel({ listing, meId }: { listing: Listing; meId
             {!!m.deal_id && <Button title="Open locked deal" variant="secondary" style={styles.gap}
               onPress={() => router.navigate(`/deal/${m.deal_id}` as never)} block />}
             {m.status !== 'draft' && <MandateActivity mandateId={m.id} revision={activityRevision} />}
+            {m.status !== 'draft' && <AgentWatchControl mandate={m} revision={activityRevision} now={now} onChange={refresh} />}
             {m.status !== 'draft' && <AgentAccess mandate={m} revision={activityRevision} now={now} />}
           </Card>
         );
@@ -155,6 +157,11 @@ export default function MandatePanel({ listing, meId }: { listing: Listing; meId
       {showForm ? (
         <Card style={styles.mandate}>
           <Text variant="bodyMedium" style={styles.intro}>{side === 'buy' ? 'Buy this ticket' : 'Sell this ticket'}</Text>
+          <AgentDraft listingId={listing.id} side={side} disabled={!!busy} onUse={proposal => {
+            if (proposal.bound_cents !== null && proposal.duration_minutes !== null && proposal.max_rounds !== null) {
+              setAmount((proposal.bound_cents / 100).toFixed(2)); setMinutes(String(proposal.duration_minutes)); setRounds(String(proposal.max_rounds));
+            }
+          }} />
           <Input label={side === 'buy' ? 'Maximum price (USD)' : 'Minimum price (USD)'}
             accessibilityLabel={side === 'buy' ? 'Maximum price in USD' : 'Minimum price in USD'}
             keyboardType="decimal-pad" value={amount} onChangeText={setAmount} editable={!busy} />

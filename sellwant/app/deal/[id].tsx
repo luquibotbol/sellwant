@@ -18,23 +18,35 @@ import { payAction } from '@/lib/payments';
 import { openPayment } from '@/lib/open-payment';
 import { stepFor, PROGRESS, HandoffState, Role } from '@/lib/handoff';
 import { useAsync } from '@/hooks/useAsync';
-import { useSession } from '@/hooks/useSession';
+import { useSession, type SessionState } from '@/hooks/useSession';
 import ReportSheet from '@/components/ReportSheet';
+import SandboxPaymentPanel from '@/components/SandboxPaymentPanel';
 import {
   getDeal,
   advanceDeal,
   getCounterpartyContact,
   DealWithContext,
+  getSandboxPayment,
 } from '@/services/data';
 
 export default function DealScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const session = useSession();
-  const deal = useAsync(() => getDeal(id), [id]);
+  if(session===undefined)return <View style={[styles.container,styles.centered]}><ActivityIndicator color={colors.mutedForeground}/></View>;
+  // Dispose every private async cache and pending human confirmation during
+  // identity/route changes. A late response from the old instance cannot
+  // populate the new participant's deal, contacts or approval link.
+  return <DealDetail key={`${id}:${session?.user.id ?? 'anonymous'}`} id={id} session={session}/>;
+}
+
+function DealDetail({id,session}:{id:string;session:Exclude<SessionState,undefined>}) {
+  const deal = useAsync(async () => session?.user.id?getDeal(id):null, [id]);
+  const sandboxEnabled=process.env.EXPO_PUBLIC_SANDBOX_PAYMENTS_ENABLED==='true';
+  const sandbox=useAsync(async()=>sandboxEnabled&&session?.user.id?getSandboxPayment(id,session.user.id):null,[id,session?.user.id]);
 
   const me = session?.user.id ?? null;
   const d = deal.data;
-  const role: Role | null = !d || !me ? null : d.buyer_id === me ? 'buyer' : 'seller';
+  const role: Role | null = !d || !me ? null : d.buyer_id === me ? 'buyer' : d.seller_id===me?'seller':null;
   const otherId = !d || !role ? null : role === 'buyer' ? d.seller_id : d.buyer_id;
 
   const contact = useAsync(
@@ -48,7 +60,7 @@ export default function DealScreen() {
   const [copied, setCopied] = useState<string | null>(null);
   const [reporting, setReporting] = useState(false);
 
-  if (session === undefined || deal.loading) {
+  if (deal.loading) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator color={colors.mutedForeground} />
@@ -82,6 +94,9 @@ export default function DealScreen() {
   const other = role === 'buyer' ? d.seller : d.buyer;
   const selling = d.listing?.type === 'sell';
   const stageIndex = PROGRESS.indexOf(state);
+  const sandboxLinked=!!sandbox.data?.payment;
+  const paymentLoading=sandboxEnabled&&(sandbox.loading||!!sandbox.error);
+  const refreshPayment=()=>{sandbox.reload();deal.reload();contact.reload();};
 
   const run = async (to: HandoffState) => {
     setBusy(true);
@@ -111,7 +126,7 @@ export default function DealScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Progress. Cancelled is off-path so the rail is hidden entirely. */}
-      {state !== 'cancelled' && (
+      {state !== 'cancelled' && !sandboxLinked && !paymentLoading && (
         <View style={styles.rail}>
           {PROGRESS.map((s, i) => (
             <View key={s} style={styles.railItem}>
@@ -153,7 +168,13 @@ export default function DealScreen() {
         )}
       </Pressable>
 
+      {sandboxEnabled && sandbox.loading && <ActivityIndicator style={styles.step} color={colors.mutedForeground}/>}
+      {sandboxEnabled && sandbox.error && <View style={styles.step}><ErrorState message={sandbox.error.message} onRetry={sandbox.reload}/></View>}
+      {sandbox.data && (sandboxLinked||sandbox.data.eligible) && <SandboxPaymentPanel key={`${d.id}:${me}`} dealId={d.id} role={role}
+        meId={me!} status={sandbox.data} onChanged={refreshPayment} onRefresh={refreshPayment}/>}
+
       {/* The current step for this person, from the state x role table. */}
+      {!sandboxLinked && !paymentLoading && <>
       <Card
         accent={step.waiting ? undefined : role === 'buyer' ? 'want' : 'sell'}
         style={styles.step}
@@ -209,6 +230,7 @@ export default function DealScreen() {
           </Text>
         )}
       </Card>
+      </>}
 
       {/* Counterparty. RLS only returns their contact because a deal exists. */}
       <Card style={styles.who}>
@@ -252,7 +274,7 @@ export default function DealScreen() {
       </Card>
 
       {/* Payment handles only where paying is the actual next step. */}
-      {step.showPayment && (
+      {step.showPayment && !sandboxLinked && !paymentLoading && (
         <Card style={styles.pay}>
           <Text variant="bodyMedium">How to pay them</Text>
           {(contact.data?.accepted_payments ?? []).length === 0 ? (

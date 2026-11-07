@@ -13,6 +13,12 @@ export interface PaymentExpectation {
   currency: 'USD';
   merchantId: string;
 }
+export interface SandboxCallbackUrls { returnUrl: string; cancelUrl: string }
+export interface SandboxOrderPayload {
+  intent:'AUTHORIZE';
+  purchase_units:Array<{reference_id:string;custom_id:string;invoice_id:string;amount:Money;payee:{merchant_id:string}}>;
+  payment_source:{paypal:{experience_context:{shipping_preference:'NO_SHIPPING';user_action:'PAY_NOW';return_url:string;cancel_url:string}}};
+}
 
 interface Money { currency_code: string; value: string }
 export interface Authorization {
@@ -143,6 +149,35 @@ export function approvalUrl(order: Order): string {
   return url.toString();
 }
 
+/** Exact JSON persisted by the app before the first provider mutation. */
+export function sandboxOrderPayload(expected:PaymentExpectation,callbackUrls?:SandboxCallbackUrls):SandboxOrderPayload {
+  validateExpectation(expected);
+  let callbacks:SandboxCallbackUrls={returnUrl:'http://127.0.0.1:8789/return',cancelUrl:'http://127.0.0.1:8789/cancel'};
+  if(callbackUrls) {
+    const parsed=[new URL(callbackUrls.returnUrl),new URL(callbackUrls.cancelUrl)];
+    for(const url of parsed) {
+      const local=['127.0.0.1','localhost','[::1]'].includes(url.hostname);
+      ensure((url.protocol==='https:' || url.protocol==='http:' && local) && !url.username && !url.password &&
+        !url.search && !url.hash && url.pathname===`/deal/${expected.dealId}` &&
+        !['sellwant.com','www.sellwant.com'].includes(url.hostname),'Invalid sandbox callback URL');
+    }
+    ensure(parsed[0].origin===parsed[1].origin,'Sandbox callbacks must use the same app origin');
+    callbacks={returnUrl:parsed[0].toString(),cancelUrl:parsed[1].toString()};
+  }
+  return {intent:'AUTHORIZE',purchase_units:[{reference_id:expected.dealId,custom_id:expected.dealId,invoice_id:expected.dealId,
+    amount:{currency_code:expected.currency,value:usdValue(expected.amountCents)},payee:{merchant_id:expected.merchantId}}],
+    payment_source:{paypal:{experience_context:{shipping_preference:'NO_SHIPPING',user_action:'PAY_NOW',
+      return_url:callbacks.returnUrl,cancel_url:callbacks.cancelUrl}}}};
+}
+function equalJson(a:unknown,b:unknown):boolean {
+  if(a===b)return true;
+  if(Array.isArray(a)||Array.isArray(b))return Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((v,i)=>equalJson(v,b[i]));
+  if(a===null||b===null||typeof a!=='object'||typeof b!=='object')return false;
+  const first=a as Record<string,unknown>,second=b as Record<string,unknown>;
+  const keys=Object.keys(first).sort(),other=Object.keys(second).sort();
+  return keys.length===other.length&&keys.every((key,i)=>key===other[i]&&equalJson(first[key],second[key]));
+}
+
 export class PayPalSandbox {
   private config: ReturnType<typeof sandboxConfig>;
   private transport: Transport;
@@ -231,21 +266,20 @@ export class PayPalSandbox {
     ensure(expected.merchantId === this.config.merchantId, 'Seller is not the configured sandbox merchant');
   }
 
-  async createOrder(expected: PaymentExpectation, requestId: string): Promise<Order> {
+  async createOrder(expected: PaymentExpectation, requestId: string, callbackUrls?: SandboxCallbackUrls): Promise<Order> {
     this.expected(expected);
-    const order = await this.request<Order>('POST', '/v2/checkout/orders', {
-      intent: 'AUTHORIZE',
-      purchase_units: [{
-        reference_id: expected.dealId, custom_id: expected.dealId, invoice_id: expected.dealId,
-        amount: { currency_code: expected.currency, value: usdValue(expected.amountCents) },
-        payee: { merchant_id: expected.merchantId },
-      }],
-      payment_source: { paypal: { experience_context: {
-        shipping_preference: 'NO_SHIPPING', user_action: 'PAY_NOW',
-        return_url: 'http://127.0.0.1:8789/return', cancel_url: 'http://127.0.0.1:8789/cancel',
-      } } },
-    }, requestId);
+    const order=await this.request<Order>('POST','/v2/checkout/orders',sandboxOrderPayload(expected,callbackUrls),requestId);
     return verifyOrder(order, expected);
+  }
+
+  /** Replays the saved app payload rather than rebuilding it from current env.
+   * Strict shape validation prevents saved JSON from widening amount/payee. */
+  async createOrderFromPayload(expected:PaymentExpectation,requestId:string,payload:SandboxOrderPayload):Promise<Order> {
+    this.expected(expected);
+    const context=payload?.payment_source?.paypal?.experience_context;
+    const checked=sandboxOrderPayload(expected,{returnUrl:context?.return_url,cancelUrl:context?.cancel_url});
+    ensure(equalJson(payload,checked),'Persisted PayPal create payload does not match deal');
+    return verifyOrder(await this.request<Order>('POST','/v2/checkout/orders',payload,requestId),expected);
   }
 
   async getOrder(orderId: string, expected: PaymentExpectation): Promise<Order> {
@@ -292,7 +326,8 @@ export class PayPalSandbox {
     ensure(typeof recordCaptureId === 'function', 'A durable capture ID recorder is required');
     const auth = await this.boundAuthorization(orderId, authorizationId, expected);
     ensure(auth.status === 'CREATED', 'Authorization is not available for capture; reconcile before retrying');
-    if (auth.expiration_time) ensure(Date.parse(auth.expiration_time) > this.now(), 'Authorization has expired');
+    ensure(typeof auth.expiration_time==='string' && Number.isFinite(Date.parse(auth.expiration_time)) &&
+      Date.parse(auth.expiration_time)>this.now(),'Authorization expiry must be known and unexpired');
     const receipt = await this.request<{ id: string }>('POST', `/v2/payments/authorizations/${resourceId(authorizationId)}/capture`, {
       amount: { currency_code: expected.currency, value: usdValue(expected.amountCents) },
       invoice_id: expected.dealId, final_capture: true,

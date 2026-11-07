@@ -46,9 +46,9 @@ function stub(opts: { rows?: unknown[]; resendStatus?: number } = {}) {
 }
 
 /** Run the cron and wait for the work it handed to waitUntil. */
-async function runCron() {
+async function runCron(extra: Record<string, string> = {}) {
   const pending: Promise<unknown>[] = [];
-  await worker.scheduled({}, env, { waitUntil: (p: Promise<unknown>) => pending.push(p) });
+  await worker.scheduled({}, { ...env, ...extra }, { waitUntil: (p: Promise<unknown>) => pending.push(p) });
   await Promise.all(pending);
 }
 
@@ -84,6 +84,35 @@ describe('the outbox drain', () => {
     const mail = calls.find((c) => c.url.includes('resend'))!;
     expect(mail.body.headers['List-Unsubscribe']).toMatch(/^<https:\/\/sellwant\.com\/api\/unsubscribe\?/);
     expect(mail.body.headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
+  });
+
+  test('payment events use the isolated deal link and transactional wording', async () => {
+    const dealId = '11111111-2222-4333-8444-555555555555';
+    const calls = stub({ rows: [row({ kind: 'deal_payment', payload: {
+      deal_id: dealId, listing_title: 'Synthetic concert', event: 'authorized', amount_cents: 1665, currency: 'USD',
+    } })] });
+    await runCron({ MAIL_ORIGIN: 'http://127.0.0.1:8788' });
+    const mail = calls.find(c => c.url.includes('resend'))!;
+    expect(mail.body.text).toContain(`http://127.0.0.1:8788/deal/${dealId}`);
+    expect(mail.body.text).toContain('Funds have not been captured.');
+    expect(mail.body.headers).toBeUndefined();
+    expect(mail.headers['Idempotency-Key']).toBe('00000000-0000-4000-8000-000000000001');
+    expect(rpcNames(calls)).toEqual(['claim_email_batch', 'mark_email_sent']);
+  });
+
+  test('isolated offer links and unsubscribe links share the configured origin', async () => {
+    const calls = stub({ rows: [row()] });
+    await runCron({ MAIL_ORIGIN: 'http://127.0.0.1:8788' });
+    const mail = calls.find(c => c.url.includes('resend'))!;
+    expect(mail.body.text).toContain('http://127.0.0.1:8788/event/abc');
+    expect(mail.body.headers['List-Unsubscribe']).toMatch(/^<http:\/\/127\.0\.0\.1:8788\/api\/unsubscribe\?/);
+    expect(mail.body.text).not.toContain('sellwant.com');
+  });
+
+  test('invalid isolated mail origin cannot send credential-bearing links', async () => {
+    const calls = stub({ rows: [row()] });
+    await runCron({ MAIL_ORIGIN: 'https://secret@unrelated.example/' });
+    expect(calls).toHaveLength(0);
   });
 
   test('a rejected send is recorded as failed, not as sent', async () => {

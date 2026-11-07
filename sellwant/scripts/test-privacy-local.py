@@ -286,6 +286,11 @@ def main():
               DELETE FROM public.agent_capabilities WHERE mandate_id IN (SELECT id FROM public.agent_mandates WHERE listing_id IN ({listings}));
               DELETE FROM public.agent_mandates WHERE listing_id IN ({listings});
               DELETE FROM public.lock_ins WHERE listing_id IN ({listings});
+              DO $outbox$ BEGIN
+                IF to_regclass('public.email_outbox') IS NOT NULL THEN
+                  DELETE FROM public.email_outbox WHERE listing_id IN ({listings});
+                END IF;
+              END $outbox$;
               DELETE FROM public.offers WHERE listing_id IN ({listings});
               DELETE FROM public.listings WHERE id IN ({listings});
               DELETE FROM auth.users WHERE id IN ({users}); COMMIT;""")

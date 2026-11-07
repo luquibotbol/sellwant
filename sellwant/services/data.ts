@@ -9,6 +9,7 @@ import { supabase } from '@/services/supabase';
 import { stepFor, HandoffState, Role } from '@/lib/handoff';
 import type { Session } from '@supabase/supabase-js';
 import type { AgentCapabilityTool } from '@/lib/mandates';
+import { fetchSandboxPayment, type SandboxPaymentAction, type SandboxPaymentResponse } from '@/lib/deal-payments';
 
 /**
  * An expired or revoked token should log you out, not render "something went
@@ -1361,4 +1362,108 @@ export async function issueAgentCapability(input: {
 export async function revokeAgentCapability(id: string): Promise<void> {
   const { error } = await supabase.rpc('revoke_agent_capability', { p_capability_id: id });
   if (error) await fail(error);
+}
+
+/** Server APIs share the isolated app origin; credentials remain in the session. */
+async function sandboxPaymentRequest(id: string, action?: SandboxPaymentAction, expectedUserId?: string): Promise<SandboxPaymentResponse> {
+  if (process.env.EXPO_PUBLIC_SANDBOX_PAYMENTS_ENABLED !== 'true') throw new Error('Sandbox payments are disabled.');
+  const session = await getSession();
+  if (!session?.access_token) throw new Error('Sign in to review this payment.');
+  if (expectedUserId && session.user.id !== expectedUserId) throw new Error('Your account changed. Refresh before continuing.');
+  const origin = process.env.EXPO_PUBLIC_HACKATHON_API_ORIGIN ||
+    (typeof window !== 'undefined' ? window.location.origin : '');
+  if (!origin) throw new Error('Configure the isolated payment service.');
+  return fetchSandboxPayment(origin, session.access_token, id, action);
+}
+
+export function getSandboxPayment(id: string, expectedUserId?: string): Promise<SandboxPaymentResponse> {
+  return sandboxPaymentRequest(id, undefined, expectedUserId);
+}
+
+export function sandboxPaymentAction(id: string, action: SandboxPaymentAction, expectedUserId?: string): Promise<SandboxPaymentResponse> {
+  return sandboxPaymentRequest(id, action, expectedUserId);
+}
+
+export interface AgentDraftSuggestion {
+  status: 'ready' | 'needs_clarification';
+  bound_cents: number | null;
+  duration_minutes: number | null;
+  max_rounds: number | null;
+  explanation: string;
+  clarification: string | null;
+}
+export interface AgentDraftGeneration {
+  proposal: AgentDraftSuggestion;
+  model: string;
+  response_id: string;
+}
+export interface AgentWatch {
+  id: string;
+  mandate_id: string;
+  owner_id: string;
+  capability_id: string;
+  enrollment_key: string;
+  expires_at: string;
+  state: 'active' | 'stopped' | 'finished' | 'blocked';
+  next_run_at: string;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export type AgentWatchReceipt = Pick<AgentWatch, 'id' | 'state'> & Partial<Pick<AgentWatch, 'mandate_id' | 'expires_at'>>;
+
+async function agentApi(path: '/api/agent/draft' | '/api/agent/watch', body: Record<string, unknown>): Promise<unknown> {
+  const session = await getSession();
+  if (!session?.access_token) throw new Error('Sign in to manage your agent.');
+  const configured = process.env.EXPO_PUBLIC_HACKATHON_API_ORIGIN ||
+    (typeof window !== 'undefined' ? window.location.origin : '');
+  const origin = new URL(configured);
+  if (origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash ||
+      (origin.protocol !== 'https:' && !(origin.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(origin.hostname)))) {
+    throw new Error('Configure the isolated agent service.');
+  }
+  const response = await fetch(`${origin.origin}${path}`, {
+    method: 'POST', headers: { authorization: `Bearer ${session.access_token}`, 'content-type': 'application/json', origin: origin.origin },
+    body: JSON.stringify(body), credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(60000),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok) {
+    const messages: Record<string, string> = {
+      unknown: 'The result is uncertain. Refresh your access and watch status before retrying.',
+      account_required: 'AI is temporarily unavailable. You can enter your mandate terms manually.',
+      discovery_incomplete: 'The listing scan is incomplete. Try again after refreshing.',
+      denied: 'This action is unavailable for your account or current mandate.',
+      invalid_input: 'Review the request and try again.',
+    };
+    throw new Error(messages[result?.error] || 'The agent service is unavailable. Refresh before retrying.');
+  }
+  return result;
+}
+
+export async function requestAgentDraft(input: { listingId: string; side: 'buy' | 'sell'; instruction: string }): Promise<AgentDraftGeneration> {
+  if (process.env.EXPO_PUBLIC_AGENT_AI_ENABLED !== 'true') throw new Error('AI drafts are disabled.');
+  const value = await agentApi('/api/agent/draft', { listing_id: input.listingId, side: input.side, instruction: input.instruction });
+  return value as AgentDraftGeneration;
+}
+
+export async function getAgentWatch(mandateId: string): Promise<AgentWatch | null> {
+  const { data, error } = await supabase.from('agent_watches')
+    .select('id,mandate_id,owner_id,capability_id,enrollment_key,expires_at,state,next_run_at,last_error,created_at,updated_at')
+    .eq('mandate_id', mandateId).maybeSingle();
+  if (error) await fail(error);
+  return data as AgentWatch | null;
+}
+
+export async function startAgentWatch(input: { mandateId: string; capability: string; enrollmentKey: string; expiresAt: string }): Promise<AgentWatchReceipt> {
+  if (process.env.EXPO_PUBLIC_AGENT_WATCHER_ENABLED !== 'true') throw new Error('Background watching is disabled.');
+  return await agentApi('/api/agent/watch', { action: 'start', mandate_id: input.mandateId, capability: input.capability,
+    enrollment_key: input.enrollmentKey, expires_at: input.expiresAt }) as AgentWatchReceipt;
+}
+
+export async function stopAgentWatch(watchId: string): Promise<AgentWatchReceipt> {
+  return await agentApi('/api/agent/watch', { action: 'stop', watch_id: watchId }) as AgentWatchReceipt;
+}
+
+export async function resumeAgentWatch(watchId: string): Promise<AgentWatchReceipt> {
+  return await agentApi('/api/agent/watch', { action: 'resume', watch_id: watchId }) as AgentWatchReceipt;
 }

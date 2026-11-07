@@ -4,6 +4,8 @@ Authoritative tracker. Started October 28, updated November 5, 2026. Branch `hac
 
 **Latest user clarification:** this repository is Lucas's handoff. No separate prototype repository is required; implement the missing product MCP here using the verified persistent trading boundaries. Earlier notes requesting a separate prototype are superseded. Private `sellwant/.env.llm` now exists (0600, Git-ignored). The user supplied an OpenAI key there; a read-only model-access request returned HTTP 200 and confirmed available candidates. Model selection/text generation and deployed secret configuration are not yet verified. The PayPal void checkout was approved, authorized and voided successfully; the capture checkout still awaits buyer approval and later explicit simulated handoff.
 
+**Latest manager checkpoint, November 6 at 05:55 UTC:** real OpenAI drafting and an actual bounded acceptance proposal are verified. The existing outbox prerequisite and migrations `005`/`006`/`007` are applied only locally; 64 payment and 65 watcher SQL/REST/race checks pass. Ordered replay exactly matches all 66 app functions; typecheck and 291 offline tests pass. Runtime startup failed in two distinct approaches, triggering the handoff's required pause. The second failure is diagnosed: `git archive HEAD:sellwant` ran from the app subdirectory and returned an empty archive; a read-only repository-root comparison produces 185 files including `package.json`. All roles stopped and work/logs are preserved. No runtime, browser journey, human approval or integrated capture is claimed. Details below supersede the older funding pause.
+
 User's current request authorizes milestone implementation. Work one coherent milestone at a time. No production deployment, data modification or main push/merge. Preserve existing marketplace behavior. A milestone requiring a real external integration is incomplete until that integration is demonstrated.
 
 ## Scope and schedule
@@ -128,10 +130,10 @@ States: planned = design only; implemented = code exists; verified = stated chec
 | M0 tooling and deadline research | Verified documentation | Official URLs/setup matrix; Codex local subcommands checked; no new account connection claimed |
 | M0 local baseline | Verified with limits | 87 offline tests, normalization/PNG checks, typecheck and placeholder web build pass; DB/browser/payment not run |
 | M1 adapter, harness and local safety checks | Verified locally; external gate still blocked | Server-only sandbox adapter, private resumable journal/lock, CLI; 33 payment tests, 120 total offline tests; pinned Bun 1.3.14 passes; typecheck/build evidence below |
-| M1 actual sandbox authorize/capture/void | Authorize/void verified; capture path pending buyer approval | November 5 void order `21V19307KS044112F` authorized as `14F6288189074490Y` for 1665 cents/USD, then provider-confirmed VOIDED; repeat void reconciles the same result. Capture order `0M315443YG505872E` still rejects pending buyer approval. No handoff/capture is claimed |
+| M1 actual sandbox authorize/capture/void | Authorize/void verified; old capture order now unreadable | November 6 readback confirms authorization `14F6288189074490Y` VOIDED for 1665 cents/USD with no captures. Capture order `0M315443YG505872E` now returns HTTP 404 `INVALID_RESOURCE_ID`; its remote state is unverified and expired request key/journal are preserved. Buyer availability/disposition of this order gate fresh checkout. No handoff/capture is claimed |
 | M2 database/prototype integration | Database and MCP verified locally; human browser journey incomplete | Existing 42 core, 65 mandate, 42 REST and 39 privacy checks pass. New capability context passes 55 real SQL/REST checks; official MCP client passes 26 real Worker/PostgREST groups including public offer discovery, counter/accept, restart/idempotency and revocation. All four migrations replay to 46 identical app definitions. Typecheck, 230 offline tests and isolated Worker dry-run pass. Human review UI remains disabled by default and browser-unverified; hosted MCP/client compatibility remains unverified. No separate Lucas repository is required |
-| M3 AI/watcher/notifications/full handoff | Planned; market input foundation and OpenAI credential access verified | Public cursor discovery and MCP public offer/rate reads are implemented. OpenAI model-list authentication returned HTTP 200 with the user's private key. No model-generated proposal, durable watcher, notification extension or integrated financial/handoff journey yet |
-| M4 hardened demo/submission | Planned | End-to-end/concurrency/privacy checks, reproducible demo, video and submission remain; dates are planning targets, not a reason to stop implementation |
+| M3 AI/watcher/notifications/full handoff | Real model + local SQL verified; paused at runtime startup | Actual structured draft and correct 1665-cent acceptance proposal verified. Applied outbox +005/006/007; 129 independent payment/watcher checks and exact 66-function replay pass. UI/shared API/outbox/cron wiring exists. Durable service failed to start in two approaches; browser/human approval, real notifications and integrated payment/handoff remain unverified |
+| M4 hardened demo/submission | Local reliability checks and demo setup verified; deliverables incomplete | Guarded repeatable setup produces three synthetic logins/two listings with private credentials; 291 offline tests and core/privacy/MCP regressions pass. Verification and submission narration drafts exist. Two-user browser journey, durable runtime proof, real capture, functional judge access, video and submission remain |
 
 ## M1 runbook and milestone evidence
 
@@ -376,3 +378,168 @@ bun --env-file=.env.paypal-sandbox run paypal:sandbox status --deal-id demo-void
 Expected state: `voided`, uncaptured. Repeat authorize/capture/status or void on the corresponding completed journals to demonstrate no second financial mutation. The harness caps synthetic amounts at $100; this is not a marketplace limit. Private journals are in `sellwant/.local/paypal-sandbox/`. Preserve them after errors. Unknown capture blocks void; use status/provider dashboard for reconciliation. Do not retry an unknown create beyond its 5-hour local safety window. A stale file lock after a killed process requires checking the provider outcome before manually removing that exact lock; never delete journals as cleanup.
 
 **Remaining M1 gate:** sandbox authorization/void are verified. The separate capture order still requires buyer approval, backend authorization, explicit simulated handoff and provider-confirmed capture. Generate replacement links only when the buyer is available. M1 remains incomplete until capture is proven. M2 has a verified recovered database and persistent bounded trading; product MCP is being implemented in this repository following the user's handoff clarification. Browser validation remains unverified while browser control is stopped.
+
+### November 5 fresh manager session: preserved work and required pause
+
+Read the handoff, brief, baseline, tracker, agent contract and repository rules;
+verified branch `hackathon/paypal-ai-2026` at `ebb74250`. Preserved the user's
+modified handoff and untracked brief. The isolated API55321/DB55322 stack is
+running and healthy. Chrome browser inventory/control is available in this
+session; no browser journey or human approval was performed. Read-only Wrangler
+authentication check returned unauthenticated; no deployment occurred.
+
+Four native worker roles were created within four total slots: payment, AI and
+app ran first; verification rotated in after the others reached safe checkpoints.
+Manager retained shared routes/data, migration application and this tracker.
+
+| Role | Verified progress | Preserved implementation / remaining work | Attempts / stopped state |
+|---|---|---|---|
+| Payment proof | At 23:30:27 UTC the existing capture order still required buyer action, with exact deal/1665 cents/USD/merchant verified and no authorizations/captures. At 23:30:46 UTC the existing void authorization remained provider-confirmed VOIDED. [Evidence](PAYMENT_PROOF.md) | Buyer availability/approval and later explicit human simulated handoff remain required. No new order, approval link or financial mutation. Private journals preserved | Restricted OAuth failed; permission-required rerun succeeded. No live process, journal lock or unknown financial operation introduced. Stopped |
+| AI and watcher | Initial worker typecheck passed; manager typecheck later passed after shared integration | `worker/ai.ts`, `worker/watcher.ts`, migration `006`, `scripts/prove-ai-local.ts`. Strict proposals, encrypted scoped capability storage, durable leases/operation keys are drafted. No successful generation, SQL test, UI enrollment or running watcher proven | Generation approach failed; stopped. No migration or financial operation |
+| App integration | 24 focused fixture tests/94 assertions passed; subsequent manager full suite included the callback test and passed 255 tests | Payment ledger/API/UI, outbox event migration `005`, callback adapter extension and tests. Manager wired `services/data.ts`, Worker routes/cron/email dispatch. SQL, recovery races, browser, notifications and real payment journey remain unverified | No technical blocker attempts. No migration/provider operation or live process. Stopped |
+| Verification and demo | Independently compared schema/model requirements and obtained decisive redacted HTTP 429 account evidence | Test design, integrated SQL/browser scenarios, reproducible demo, video and submission are still incomplete | Distinct diagnostic approach failed; no third attempt. Stopped |
+
+Fresh baseline before new edits: typecheck and 230 offline tests/1,662 assertions
+passed. After shared integration: typecheck and 255 offline tests/1,768 assertions
+passed. Three further outbox integration cases passed in the focused 12-test,
+24-assertion outbox suite; the complete suite was not rerun after those three
+test-only additions. Final whitespace check passed. Provider fixtures do not
+prove SQL transactions, real AI, live notifications or the integrated journey.
+
+**Blocking condition and two distinct approaches:**
+
+1. Hypothesis: configured Responses structured generation works with the supported
+   configurable `gpt-5.4-mini` default. Ran
+   `bun --env-file=.env.llm scripts/prove-ai-local.ts`. The sandbox invocation
+   failed immediately; its required escalated rerun also failed with generic
+   `AgentFailure: unavailable`. No successful generation journal was produced.
+2. Hypothesis: the generic error masks a provider rejection rather than a schema
+   failure. Verification inspected the strict schema offline, then injected a
+   transport that records only status/code/type/request ID around one synthetic
+   generation request. The sandbox needed network escalation; the escalated
+   request returned HTTP 429, `credit_balance_exhausted`, `insufficient_quota`,
+   request `req_2f8a37a615aa439ab95375454867f0bd`. Private 0600 evidence is
+   `.local/ai/generation-diagnostic-1793921648007.json`. Permission reruns are
+   recorded within their respective approach, not counted as extra attempts.
+
+Both approaches failed to produce real generation. The handoff's explicit
+two-attempt rule requires stopping all roles and pausing for the user's decision.
+No new provider requests, migrations, deploys or model substitutions follow this
+checkpoint. All source edits remain preserved in the worktree; no commit/push.
+
+**Alternatives:** fund the existing OpenAI project, then resume the same proof;
+or supply another authorized funded OpenAI project key and verify its model
+access before generation. Recommendation: fund the current project to retain
+the existing access/configuration. Never paste credentials into chat.
+
+**Resume review gates:** persist the callback origin with the immutable PayPal
+create payload before any same-key retry; bind watch expiry to capability expiry
+or enforce watch expiry transactionally so a staged job cannot outlive enrollment;
+independently review/apply `005` then `006` and extend ordered replay/tests;
+finish AI draft/enrollment UI and verify true model proposals; establish a durable
+isolated runtime and distinguish it from hosted Cloudflare operation. Capture
+journal's existing authorization key safety window ends November 6 at 00:08:38 UTC;
+preserve its ID and reconcile before resuming, without discarding the journal or
+rotating IDs. Buyer checkout approval never attests handoff.
+
+### November 6 resumed manager checkpoint and runtime stopping rule
+
+User resumed at approximately 05:27 UTC. Current branch/worktree were rechecked;
+the original user brief and modified handoff remain preserved. All four native
+roles rotated within four total slots. No production changes, deployment, push,
+real notification or financial mutation occurred.
+
+| Role | Verified progress | Remaining / checkpoint state |
+|---|---|---|
+| Payment proof | Fresh read at 05:45:31 UTC: old capture order returns 404 `INVALID_RESOURCE_ID`; direct void authorization remains `VOIDED`, exact 1665 cents/USD, no captures. All journals unchanged/private/unlocked | Buyer availability and disposition of the unreadable order remain human gates. Expired key preserved; no replacement link/order or handoff. Role stopped with no live process |
+| AI and watcher | Real structured draft and real acceptance proposal using `gpt-5.4-mini-2026-03-17`; 29 focused tests/typecheck. Human-reviewed draft/start/status/stop/resume UI implemented; 65 independent actual watcher SQL/REST/race checks pass after007 | `scripts/prove-watcher-local.py` is authored but unrun. No durable scheduler, browser approval or hosted proof. Role stopped |
+| App integration | Full immutable PayPal create JSON/UUIDs, buyer authorize intent, known hold expiry, fixed deadlines, fenced capture/cancel/reconcile, typed deduped outbox and separate human handoffs implemented; 64 independent actual payment SQL/REST/race checks pass | Provider fixtures prove adapter logic only. Browser/account-switch behavior and actual integrated PayPal journey remain unverified. Role stopped |
+| Verification/demo | Guarded SQL/REST/races found cursor defect and verified fix; seeded/repeated three local logins + two listings with zero approvals/deals/payments/watches. [Verification](VERIFICATION_DEMO.md), [submission draft](DEMO_SUBMISSION_DRAFT.md) | Native Chrome is available, browser-tab connector inventory is absent. No page journey, video, upload or submission. Role stopped |
+
+**Actual AI evidence:** funding recheck succeeded with HTTP200 at 05:28 UTC.
+A strict text validator initially misclassified a money explanation as a phone;
+offline reproduction/regression fixed it. The next real output parsed correctly
+but waited because the prompt ambiguously described poster counteroffers.
+Clarified the existing RPC's actual accept-vs-counter rules; one corrected
+negotiation-only call accepted supplied offer1665 within seller minimum1600.
+The verified draft response is
+`resp_02024a4823cd4b51016aed67d684ec87d09e0536cc40472e85`; negotiation response is
+`resp_08c30707399c749d016aed687f73f887d082ea71b28b82aca0`.
+Private `.local/ai/generation-proof-1793943679066.json` preserves synthetic model
+outputs. The explanation imprecisely said the offer “exactly” met the floor;
+the validated numbers are1665>=1600. No model action approved a mandate/payment
+or attested handoff. Fixture proposals are separate from human UI approval.
+
+**Applied and replayed locally:** the first005 attempt rolled back because the
+recovered source lacks the not-yet-installed existing outbox. Reviewed/applied
+`20260821_email_outbox.sql` in an explicit transaction, then005 and006. Actual
+watcher staging exposed PostgreSQL error2201B for cursor regex `{1,1024}`.
+Additive007 replaces that with separate character-length and charset checks;
+006's applied bytes remain unchanged. Valid1024 and invalid1025/empty/charset
+cases pass. `scripts/hackathon-migrations-local.py` guards the exact stack,
+refuses reapplication and keeps private exact SQL/hash receipts.
+
+Ordered baseline→001→002→003→004→outbox→005→006→007 replay passed: source baseline
+and25 functions,1452 effective privileges, then exact final catalog and66 app
+functions. Disposable DB removed, original catalog unchanged. Root reran42 core,
+65 mandate,39 privacy,55 access-context,42 mandate REST and26 official MCP/Worker/
+PostgREST groups; all passed and owned fixtures cleaned. Outbox-aware fixture
+cleanup now removes owned notification rows before listing deletion. Typecheck
+and291 offline tests/1932 assertions pass. Provider fixtures and SQL receipts
+are explicitly not real PayPal proof.
+
+**Runtime blocker — two distinct approaches, both failed:**
+
+1. Hypothesis: current source/dependencies can export directly in the original
+   iCloud-backed checkout. The guarded runtime launcher ran `bun run build` with
+   local Supabase/public feature configuration. It exceeded180 seconds. The
+   launcher and exact child PIDs89990/90033/90034 were subsequently confirmed
+   absent; no service container was started. Private build directory:
+   `.local/hackathon-runtime/build-ac612ec63e2f466db95e018bfffd39a1`.
+2. Hypothesis: a downloaded temporary copy avoids the original checkout's
+   historical file-read stalls. The launcher archived HEAD, overlaid current
+   source and cloned downloaded dependencies before a frozen install. It failed
+   immediately: `Bun could not find a package.json file to install from`.
+   Private log: `.local/hackathon-runtime/build-09056c61b8d44565a2d79df14c84378e/install-stable.log`.
+   Scratch copy: `/private/tmp/sellwant-hackathon-build-bb_3ld7h`.
+
+Read-only follow-up diagnosis, not a third build: `git archive HEAD:sellwant`
+from the app subdirectory exits0 with zero entries; the same read from repository
+root yields185 entries and `package.json`. The overlay therefore contained only
+changed files. Correct the archive working directory to `ROOT.parent` and assert
+the manifest exists before dependency installation. This manager-authored
+preparation bug remains unfixed because the two-attempt rule requires stopping
+for the user's decision.
+
+At stop, guarded status confirms `running:false,id:null` for the runtime and
+outbox/005/006/007 applied with66 functions. No watcher proof fixture was prepared.
+Intentional demo accounts/listings and all private logs/journals remain preserved;
+generated Python cache/build files are uncommitted. All worker roles are terminal
+with no live child processes or in-flight financial requests. No commit/push.
+
+**Impact/alternatives/recommendation:** scheduler survival, live API/browser
+journey and integrated checkout cannot be verified until runtime startup works.
+Recommended: apply the confirmed repository-root archive correction plus manifest
+preflight, then resume the downloaded-copy build and actual scheduled proof.
+Alternative: overlay the exact current frontend onto the existing fully downloaded
+verification checkout and build there with frozen current dependencies. Both
+retain the existing Worker/Supabase design and all required tests. Pause under
+the handoff's standing instruction; wait for the user's decision before another
+build, provider request or implementation change.
+
+### November 7 requested main publication checkpoint
+
+The user explicitly requested pushing this checkpoint to `main`, authorizing an
+exception to the earlier branch-publication restriction for this push. The
+implementation goal remains paused with the runtime/browser/capture gates above
+unfinished. This publishes preserved implementation and evidence; it does not
+claim completion or authorize production migrations/payments.
+
+The existing main-push workflow deploys production, so the publication commit
+uses `[skip ci]` to preserve the earlier no-production-deployment instruction.
+No workflow dispatch or deployment configuration change is requested. Private
+credentials, operation journals, demo logins, schema exports, Python caches, the
+untracked user brief and pre-existing handoff edits are excluded. Fresh offline
+checks pass291 tests/1932 assertions plus13 normalization and5 QR decode checks.
+Fresh typecheck also passed; its initial local file-read delay did not require a
+source change. The known runtime archive-path bug remains recorded above.

@@ -17,6 +17,9 @@
  */
 
 import { handleMcp } from './mcp';
+import { handleAgentAi } from './ai';
+import { runAgentWatchers } from './watcher';
+import { handleDealPayments, recoverDealPayments, dealPaymentEmail } from './deal-payments';
 
 /** URL prefix -> the file Expo actually emitted for it. */
 const DYNAMIC = {
@@ -813,8 +816,8 @@ export function sameSig(a, b) {
   return diff === 0;
 }
 
-const unsubUrl = (profileId, kind, sig) =>
-  `${SITE}/api/unsubscribe?u=${encodeURIComponent(profileId)}` +
+const unsubUrl = (profileId, kind, sig, origin = SITE) =>
+  `${origin}/api/unsubscribe?u=${encodeURIComponent(profileId)}` +
   `&k=${encodeURIComponent(kind)}&s=${sig}`;
 
 /** One line, used by both bodies, so the HTML and the plain text cannot drift
@@ -832,12 +835,12 @@ const HOLDS_NOTHING =
  * ticket or the money. We are telling someone a number a stranger said out
  * loud, and nothing else has happened yet.
  */
-export function offerEmail(row, unsub) {
+export function offerEmail(row, unsub, origin = SITE) {
   const p = row.payload ?? {};
   const n = Math.max(1, row.collapsed ?? 1);
   const amount = money(p.amount_cents ?? 0);
   const title = plain(p.listing_title, 80) || 'your listing';
-  const link = `${SITE}/event/${row.listing_id}`;
+  const link = `${origin}/event/${row.listing_id}`;
 
   // A counter is an answer to something you said, so it reads as a reply.
   // A first offer is news about your listing. Same row, different sentence.
@@ -904,12 +907,24 @@ function mailConfig(env) {
     console.log(`email: not configured, missing ${missing.join(', ')} -- nothing sent`);
     return null;
   }
+  let origin = SITE;
+  const configured = env.MAIL_ORIGIN || env.DEAL_PAYMENTS_ORIGIN || env.AGENT_AI_ORIGIN;
+  if (configured) {
+    try {
+      const parsed = new URL(configured);
+      const local = ['127.0.0.1', 'localhost', '[::1]'].includes(parsed.hostname);
+      if ((parsed.protocol !== 'https:' && !(local && parsed.protocol === 'http:')) ||
+          parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) return null;
+      origin = parsed.origin;
+    } catch { return null; }
+  }
   return {
     url: env.SUPABASE_URL,
     key: env.SUPABASE_SECRET_KEY,
     from: env.MAIL_FROM,
     resend: env.RESEND_API_KEY,
     unsub: env.UNSUB_SECRET,
+    origin,
   };
 }
 
@@ -956,9 +971,12 @@ async function sendOne(cfg, row) {
     return false;
   }
 
-  const sig = await unsubSig(cfg.unsub, row.to_profile, row.kind);
-  const unsub = unsubUrl(row.to_profile, row.kind, sig);
-  const { subject, html, text } = offerEmail(row, unsub);
+  const transactional = row.kind === 'deal_payment';
+  const sig = transactional ? null : await unsubSig(cfg.unsub, row.to_profile, row.kind);
+  const unsub = transactional ? null : unsubUrl(row.to_profile, row.kind, sig, cfg.origin);
+  const { subject, html, text } = transactional
+    ? dealPaymentEmail(row, cfg.origin)
+    : offerEmail(row, unsub, cfg.origin);
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -973,12 +991,12 @@ async function sendOne(cfg, row) {
       subject,
       html,
       text,
-      headers: {
+      ...(!transactional ? { headers: {
         // Gmail requires one-click unsubscribe from anything sending at
         // volume, and honouring it is cheaper than being classified by not.
         'List-Unsubscribe': `<${unsub}>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-      },
+      } } : {}),
     }),
     signal: AbortSignal.timeout(10000),
   });
@@ -1090,6 +1108,8 @@ export default {
     // Authenticate before redirects/assets; a capability is never forwarded to
     // another host or the static asset service. Disabled unless explicitly set.
     if (url.pathname === '/mcp') return handleMcp(request, env, listingsJson);
+    if (url.pathname.startsWith('/api/deal-payments/')) return handleDealPayments(request, env);
+    if (url.pathname === '/api/agent/draft' || url.pathname === '/api/agent/watch') return handleAgentAi(request, env);
 
     // One canonical host. Serving the app on both www and the apex would split
     // every shared link between two URLs, and -- more concretely -- Supabase's
@@ -1209,5 +1229,7 @@ export default {
    */
   async scheduled(event, env, ctx) {
     ctx.waitUntil(drainOutbox(env));
+    ctx.waitUntil(runAgentWatchers(env, { limit: 4 }));
+    ctx.waitUntil(recoverDealPayments(env));
   },
 };

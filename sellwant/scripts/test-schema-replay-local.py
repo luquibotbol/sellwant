@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify source baseline -> 001 -> 002 -> 003 -> 004 in an owned disposable database.
+"""Verify source baseline -> 001 through 007 and outbox in an owned local database.
 
 Uses only the fixed local container verified by schema-baseline-local.py. Copies
 schema, never rows or role/global definitions. The working postgres database is
@@ -29,6 +29,10 @@ MIGRATIONS = (
     '202611050002_agent_mandates.sql',
     '202611050003_agent_privacy.sql',
     '202611050004_agent_access_context.sql',
+    '20260821_email_outbox.sql',
+    '202611050005_deal_payments.sql',
+    '202611050006_agent_watcher.sql',
+    '202611060007_watcher_cursor_checks.sql',
 )
 
 
@@ -161,7 +165,10 @@ def main():
         privileges = json.loads((baseline.PRIVATE / 'baseline-effective-permissions.json').read_text())
         baseline.require(not privileges['failures'], 'Baseline privilege report contains failures.')
         for migration in MIGRATIONS:
-            owned.sql(migration_sql[migration])
+            sql = migration_sql[migration]
+            if migration == '20260821_email_outbox.sql':
+                sql = 'BEGIN; SET LOCAL ROLE postgres;\n' + sql + "\nNOTIFY pgrst,'reload schema'; COMMIT;\n"
+            owned.sql(sql)
             print('Replayed whole migration ' + migration + '.')
         after = catalog(owned)
         differences = [key for key in before if baseline.canonical(before[key]) != baseline.canonical(after[key])]
@@ -172,7 +179,7 @@ def main():
         report.update({'baseline_compare': 'passed', 'effective_privilege_checks': privileges['checks'],
                        'ordered_migrations': list(MIGRATIONS), 'final_catalog_match': True,
                        'app_functions_compared': len(after['app_functions'])})
-        print('Ordered baseline + 001/002/003/004 matches working app catalog and all '
+        print('Ordered baseline + 001/002/003/004/outbox/005/006/007 matches working app catalog and all '
               + str(len(after['app_functions'])) + ' app function definitions.')
     except BaseException as error:
         failure = error

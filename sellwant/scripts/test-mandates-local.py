@@ -310,6 +310,11 @@ def cleanup(db, f):
           DELETE FROM public.agent_capabilities WHERE mandate_id IN (SELECT id FROM public.agent_mandates WHERE listing_id IN ('{f['listing']}','{f['listing2']}'));
           DELETE FROM public.agent_mandates WHERE listing_id IN ('{f['listing']}','{f['listing2']}');
           DELETE FROM public.lock_ins WHERE listing_id IN ('{f['listing']}','{f['listing2']}');
+          DO $outbox$ BEGIN
+            IF to_regclass('public.email_outbox') IS NOT NULL THEN
+              DELETE FROM public.email_outbox WHERE listing_id IN ('{f['listing']}','{f['listing2']}');
+            END IF;
+          END $outbox$;
           DELETE FROM public.offers WHERE listing_id IN ('{f['listing']}','{f['listing2']}');
           DELETE FROM public.listings WHERE id IN ('{f['listing']}','{f['listing2']}');
           DELETE FROM auth.users WHERE id IN ('{f['owner']}','{f['buyer']}','{f['other']}');
