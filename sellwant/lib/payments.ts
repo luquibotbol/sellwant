@@ -29,8 +29,29 @@ export type PayAction =
   | { kind: 'link'; label: string; url: string }
   | { kind: 'copy'; label: string; value: string; hint: string };
 
-const cashtag = (v: string) => v.replace(/^\$/, '');
-const at = (v: string) => v.replace(/^@/, '');
+const cashtag = (v: string) => v.trim().replace(/^\$/, '');
+const at = (v: string) => v.trim().replace(/^@/, '');
+
+/**
+ * What a Venmo, Cash App or PayPal.me username can actually contain.
+ *
+ * The handle is typed by the person being paid and read back by the person
+ * paying, so it is the payee's text inside the payer's link. Interpolated raw,
+ * a handle like `maya?txn=pay&amount=450.00#` moved the real amount into the
+ * fragment and prefilled ten times the agreed price. A handle outside this
+ * shape gets the copy affordance instead of a link: still usable, but the
+ * payer types the amount themselves.
+ */
+const USERNAME = /^[A-Za-z0-9_.-]{1,40}$/;
+
+function unlinkable(handle: PayableHandle, label: string): PayAction {
+  return {
+    kind: 'copy',
+    label,
+    value: handle.value,
+    hint: 'Check this handle in the app and enter the amount yourself.',
+  };
+}
 
 export function payAction(
   handle: PayableHandle,
@@ -41,28 +62,31 @@ export function payAction(
 
   switch (handle.kind) {
     case 'venmo':
+      if (!USERNAME.test(at(handle.value))) return unlinkable(handle, 'Copy Venmo handle');
       return {
         kind: 'link',
         label: 'Pay with Venmo',
         // The web link works on desktop and hands off to the app on mobile,
         // where the venmo:// scheme fails silently if it isn't installed.
         url:
-          `https://venmo.com/${at(handle.value)}` +
+          `https://venmo.com/${encodeURIComponent(at(handle.value))}` +
           `?txn=pay&amount=${amount}&note=${encodeURIComponent(note)}`,
       };
 
     case 'cashapp':
+      if (!USERNAME.test(cashtag(handle.value))) return unlinkable(handle, 'Copy Cash App handle');
       return {
         kind: 'link',
         label: 'Pay with Cash App',
-        url: `https://cash.app/$${cashtag(handle.value)}/${amount}`,
+        url: `https://cash.app/$${encodeURIComponent(cashtag(handle.value))}/${amount}`,
       };
 
     case 'paypal':
+      if (!USERNAME.test(at(handle.value))) return unlinkable(handle, 'Copy PayPal handle');
       return {
         kind: 'link',
         label: 'Pay with PayPal',
-        url: `https://paypal.me/${at(handle.value)}/${amount}`,
+        url: `https://paypal.me/${encodeURIComponent(at(handle.value))}/${amount}`,
       };
 
     case 'zelle':
