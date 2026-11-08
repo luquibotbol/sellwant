@@ -41,7 +41,10 @@ export function availablePaymentActions(p:SandboxPayment|null,role:'buyer'|'sell
   if(p.status==='approval_required')return role==='buyer'?['authorize','cancel','reconcile']:['cancel','reconcile'];
   const own=role==='buyer'?p.buyer_handoff_at:p.seller_handoff_at;
   const handoffs=!!(p.buyer_handoff_at && p.seller_handoff_at);
-  return [...(!own?['handoff' as const]:[]),...(handoffs?['capture' as const]:[]),'cancel','reconcile'];
+  // A buyer who has confirmed the handoff can no longer release the hold; the
+  // database refuses it too (202611100008).
+  const canCancel=!(role==='buyer' && p.buyer_handoff_at);
+  return [...(!own?['handoff' as const]:[]),...(handoffs?['capture' as const]:[]),...(canCancel?['cancel' as const]:[]),'reconcile'];
 }
 export async function fetchSandboxPayment(
   apiOrigin:string,accessToken:string,dealId:string,action?:SandboxPaymentAction,
