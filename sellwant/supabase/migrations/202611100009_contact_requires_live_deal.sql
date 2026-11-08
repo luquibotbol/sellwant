@@ -25,7 +25,12 @@ create or replace function public.shares_lock_in(other uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from lock_ins l
-    where l.state <> 'cancelled'
+    -- Live deals, plus a week after confirmation for the meetup follow-up.
+    -- A confirmed deal is terminal and the buyer reaches it alone, so
+    -- without a bound a stranger could lock, mark paid and confirm in three
+    -- calls and keep live access to the poster's contact row for good.
+    where (l.state in ('pending_payment', 'paid')
+           or (l.state = 'confirmed' and l.confirmed_at > now() - interval '7 days'))
       and ((l.buyer_id = auth.uid() and l.seller_id = other)
         or (l.seller_id = auth.uid() and l.buyer_id = other))
   );

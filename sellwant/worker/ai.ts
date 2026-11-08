@@ -222,7 +222,19 @@ export async function proposeNegotiation(env: AgentAiEnv, input: { terms: AgentT
         amount_cents: o.amount_cents, is_poster: o.is_poster, created_at: o.created_at, message: publicAgentText(o.message, 300) })),
       own_offer_ids: input.own_offer_ids, offers_complete: input.offers_complete }, transport);
   validateNegotiation(result.proposal, input);
+  // The model reads the owner's private bound next to text a counterparty
+  // wrote, and a lexical check cannot catch every way of spelling a number
+  // ("sixteen", full-width digits, "1.6k"). So nothing the model writes is
+  // published: the public message is derived from the offer amount alone,
+  // which is public anyway.
+  if (result.proposal.action === 'place_offer' && result.proposal.amount_cents !== null) {
+    return { ...result, proposal: { ...result.proposal, message: publicOfferMessage(result.proposal.amount_cents) } };
+  }
   return result;
+}
+/** The only text the negotiator ever publishes with an offer. */
+export function publicOfferMessage(amountCents: number): string {
+  return `Offer: $${(amountCents / 100).toFixed(2)}`;
 }
 /**
  * Whether free text names an amount equal to `cents`, as dollars ($16, 16.00,

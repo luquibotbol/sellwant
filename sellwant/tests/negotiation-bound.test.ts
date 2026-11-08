@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { mentionsAmount, validateNegotiation } from '../worker/ai';
-import { offers, place, terms } from './ai-fixtures';
+import { mentionsAmount, proposeNegotiation, publicOfferMessage, validateNegotiation, type AgentTransport } from '../worker/ai';
+import { env, listing, modelResponse, offers, place, terms } from './ai-fixtures';
 
 /**
  * The owner's private bound sits in the model's context beside offer text a
- * counterparty wrote. The model's message is published as-is, so the check
- * that it does not name the bound has to be deterministic.
+ * counterparty wrote. The model's own message is never published: the posted
+ * text is a template built from the offer amount. The lexical check stays as
+ * a second line, so a proposal that names the bound is still refused.
  */
 describe('a public offer message never reveals the private bound', () => {
   const ctx = { terms, offers, own_offer_ids: [] as string[] };
@@ -22,6 +23,16 @@ describe('a public offer message never reveals the private bound', () => {
     expect(() => validateNegotiation({ ...place, message: 'Happy to meet at $17.00 tonight.' }, ctx)).not.toThrow();
     // Offering exactly the bound publishes that amount anyway.
     expect(() => validateNegotiation({ ...place, amount_cents: 1600, message: 'Final: $16.00' }, ctx)).not.toThrow();
+  });
+
+  test('the published message is a template, never model text', async () => {
+    // Spelled-out and non-ASCII forms slip past any lexical check, so the
+    // model's message must not be what gets posted.
+    for (const message of ['sixteen dollars is my floor', 'floor is １６００', 'floor 1.6e3 cents']) {
+      const out = await proposeNegotiation(env, { terms, listing, offers, own_offer_ids: [], offers_complete: true },
+        (async () => modelResponse({ ...place, message })) as unknown as AgentTransport);
+      expect(out.proposal.message).toBe(publicOfferMessage(place.amount_cents as number));
+    }
   });
 
   test('the matcher reads dollars, cents and separators', () => {

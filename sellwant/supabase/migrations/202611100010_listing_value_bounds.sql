@@ -33,22 +33,28 @@ exception when check_violation then
   raise notice 'listings_event_date_range left NOT VALID: existing rows fall outside it';
 end $$;
 
-create or replace function public.profile_picture_ok(url text)
+create or replace function public.profile_picture_ok(url text, owner uuid)
 returns boolean language sql immutable as $$
   -- Pinned to this project: any other Supabase project's public bucket is
-  -- one an attacker can create and read the access logs of. Loopback is the
-  -- local development stack. Google's avatar host is Google's, not a host a
-  -- user can watch.
+  -- one an attacker can create and read the access logs of. Google's avatar
+  -- host is Google's, not a host a user can watch.
+  --
+  -- The whole URL is matched, not a prefix: a prefix match let dot segments
+  -- (avatars/../../x) walk the browser to any path on the host. The object
+  -- must be the owner's own <uid>/avatar.jpg, as uploadAvatar writes it, with
+  -- an optional ?v=<ms> cache-buster. No loopback branch: a production value
+  -- of http://127.0.0.1:<port>/... would make every viewer's browser send a
+  -- request to their own machine.
   select url is null
-      or url ~ '^https://gguzeafbwsqkhggmcjjl\.supabase\.co/storage/v1/object/public/avatars/'
-      or url ~ '^http://127\.0\.0\.1:[0-9]{1,5}/storage/v1/object/public/avatars/'
-      or url ~ '^https://lh[0-9]\.googleusercontent\.com/';
+      or url ~ ('^https://gguzeafbwsqkhggmcjjl\.supabase\.co/storage/v1/object/public/avatars/'
+                || owner::text || '/avatar\.jpg(\?v=[0-9]{1,16})?$')
+      or url ~ '^https://lh[0-9]\.googleusercontent\.com/[A-Za-z0-9_=-]+(/[A-Za-z0-9_=-]+)*$';
 $$;
 
 create or replace function public.profiles_picture_guard()
 returns trigger language plpgsql set search_path = public as $$
 begin
-  if not public.profile_picture_ok(new.profile_picture) then
+  if not public.profile_picture_ok(new.profile_picture, new.id) then
     if tg_op = 'INSERT' then
       new.profile_picture := null;
     else
@@ -66,6 +72,6 @@ create trigger profiles_picture_guard
 
 -- Existing off-site avatars stop rendering to other people.
 update public.profiles set profile_picture = null
- where not public.profile_picture_ok(profile_picture);
+ where not public.profile_picture_ok(profile_picture, id);
 
 commit;

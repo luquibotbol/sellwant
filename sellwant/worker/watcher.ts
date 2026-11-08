@@ -11,6 +11,9 @@ import {
 import { scanActiveMarket } from './market';
 import * as z from 'zod/v4';
 
+/** Matches handleMcp's own RESPONSE_LIMIT, the most /mcp will ever send. */
+const WATCH_REPLY_LIMIT = 1024 * 1024;
+
 const operationSchema = z.strictObject({ operation_key: agentUuid, context_hash: z.string().regex(/^[0-9a-f]{64}$/),
   proposal: negotiationSchema.extend({ model: z.string().min(1).max(100), response_id: z.string().min(1).max(200) }) });
 const jobSchema = z.strictObject({
@@ -87,15 +90,18 @@ async function publicOffers(config: AgentConfig, token: string, listingId: strin
     method: 'POST', headers: { authorization: `Bearer ${token}`, origin: config.origin,
       accept: 'application/json, text/event-stream', 'content-type': 'application/json', 'mcp-protocol-version': '2025-11-25' },
     body: JSON.stringify({ jsonrpc: '2.0', id: requestId, method: 'tools/call',
-      params: { name: 'get_public_offers', arguments: { listing_id: listingId, page_size: 100, ...(cursor ? {cursor} : {}) } } }),
+      // Sized from offers_message_bounded (500 chars): 51 rows of 4-byte text
+      // fit the MCP page cap, and the reply (which carries the page twice)
+      // fits WATCH_REPLY_LIMIT, so data users write cannot overflow either.
+      params: { name: 'get_public_offers', arguments: { listing_id: listingId, page_size: 50, ...(cursor ? {cursor} : {}) } } }),
     credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(10000),
   });
   if (!response.ok) { await response.body?.cancel(); throw new AgentFailure([401, 403].includes(response.status) ? 'denied' : 'unavailable'); }
   const type = response.headers.get('content-type')?.toLowerCase() || '';
   let data: unknown;
-  if (type.startsWith('application/json')) data = await agentJson(response, 256 * 1024);
+  if (type.startsWith('application/json')) data = await agentJson(response, WATCH_REPLY_LIMIT);
   else if (type.startsWith('text/event-stream')) {
-    const events = (await agentText(response, 256 * 1024)).replace(/\r\n/g, '\n').split('\n\n');
+    const events = (await agentText(response, WATCH_REPLY_LIMIT)).replace(/\r\n/g, '\n').split('\n\n');
     const results: unknown[] = [];
     for (const event of events) {
       const lines = event.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trimStart());

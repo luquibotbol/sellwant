@@ -28,5 +28,14 @@ export const supabase = createClient(url, anonKey, {
     persistSession: hasWindow,
     // Only the web build returns from a magic link with the code in the URL.
     detectSessionInUrl: hasWindow && Platform.OS === 'web',
+    // PKCE, not the implicit default. With implicit flow, auth-js accepted an
+    // access token in the fragment of ANY sellwant.com URL and replaced the
+    // current session with it, so a crafted link could sign a visitor into
+    // someone else's account (session swap). Under PKCE a callback is only
+    // honoured when this browser holds the code_verifier from the sign-in or
+    // reset it started. Cost: a confirmation or reset link opened in a
+    // different browser no longer signs that browser in; the email is still
+    // confirmed, and the person signs in normally.
+    flowType: 'pkce',
   },
 });
