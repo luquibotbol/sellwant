@@ -56,7 +56,7 @@ export type AgentDiagnostic = {
   error_type?: string | null;
 };
 export class AgentFailure extends Error {
-  constructor(readonly code: 'disabled' | 'invalid_configuration' | 'invalid_input' | 'denied' | 'unavailable' | 'account_required' | 'model_refused' | 'invalid_proposal' | 'unknown',
+  constructor(readonly code: 'disabled' | 'invalid_configuration' | 'invalid_input' | 'denied' | 'unavailable' | 'account_required' | 'model_refused' | 'invalid_proposal' | 'unknown' | 'quota_exceeded',
     readonly diagnostic?: AgentDiagnostic) {
     super(code); this.name = 'AgentFailure';
   }
@@ -224,6 +224,22 @@ export async function proposeNegotiation(env: AgentAiEnv, input: { terms: AgentT
   validateNegotiation(result.proposal, input);
   return result;
 }
+/**
+ * Whether free text names an amount equal to `cents`, as dollars ($16, 16.00,
+ * 1,600.00) or as raw cents (1600). The model sees the owner's private bound
+ * next to counterparty-written offer messages, and its own message is
+ * published verbatim, so "do not disclose the bound" cannot be left to the
+ * prompt. Spelled-out numbers are not caught; numerals are what leak.
+ */
+export function mentionsAmount(text: string, cents: number): boolean {
+  for (const m of text.matchAll(/(\d[\d,]*)(?:\.(\d{1,2}))?/g)) {
+    const whole = m[1].replace(/,/g, '');
+    if (!/^\d+$/.test(whole) || whole.length > 9) continue;
+    const dollars = Number(whole) * 100 + (m[2] ? Number(m[2].padEnd(2, '0')) : 0);
+    if (dollars === cents || (!m[2] && Number(whole) === cents)) return true;
+  }
+  return false;
+}
 export function validateNegotiation(p: NegotiationProposal, input: { terms: AgentTerms; offers: PublicAgentOffer[]; own_offer_ids: string[] }) {
   const invalid = () => { throw new AgentFailure('invalid_proposal'); };
   const t = input.terms;
@@ -239,6 +255,8 @@ export function validateNegotiation(p: NegotiationProposal, input: { terms: Agen
     if (!offer || !eligible(offer) || !within(offer.amount_cents) || p.amount_cents !== null || p.parent_offer_id !== null || p.message !== null) invalid();
   } else {
     if (p.amount_cents === null || !within(p.amount_cents) || p.offer_id !== null || p.message === null) invalid();
+    // Offering exactly the bound makes it public anyway; anything else must not name it.
+    if (p.message !== null && p.amount_cents !== t.bound_cents && mentionsAmount(p.message, t.bound_cents)) invalid();
     if (p.parent_offer_id !== null) {
       const parent = input.offers.find(o => o.id === p.parent_offer_id);
       if (!parent || !opposing(parent)) invalid();
@@ -293,6 +311,9 @@ export async function handleAgentAi(request: Request, env: AgentAiEnv): Promise<
         p_enrollment_key: input.enrollment_key, p_expires_at: input.expires_at, p_ciphertext: ciphertext }, { bearer, mutation: true }));
     }
     const input = draftInput.parse(raw);
+    // Each draft is an operator-paid model call: spend one unit of the user's
+    // daily budget first (consume_agent_draft_quota, 202611100012).
+    if (await agentRpc(config, 'consume_agent_draft_quota', {}, { bearer, mutation: true }) !== true) throw new AgentFailure('quota_exceeded');
     // Bounded public active discovery. A continuation never becomes false absence.
     const scan = await scanActiveMarket({ origin: config.origin, pageSize: 100, maxPages: 5 });
     const listing = scan.listings.find(l => l.id === input.listing_id);
@@ -300,6 +321,6 @@ export async function handleAgentAi(request: Request, env: AgentAiEnv): Promise<
     return reply(await proposeMandate(env, { ...input, listing }));
   } catch (error) {
     const code = error instanceof AgentFailure ? error.code : error instanceof z.ZodError ? 'invalid_input' : 'unavailable';
-    return reply({ error: code }, code === 'denied' ? 403 : code === 'invalid_input' ? 400 : code === 'unknown' ? 409 : 503);
+    return reply({ error: code }, code === 'denied' ? 403 : code === 'invalid_input' ? 400 : code === 'unknown' ? 409 : code === 'quota_exceeded' ? 429 : 503);
   }
 }
