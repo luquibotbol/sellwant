@@ -255,6 +255,18 @@ describe('/api/listings.json', () => {
     expect((await hit()).status).toBe(503);
   });
 
+  test("one owner-written row the API cannot show is skipped, not a 503 for everyone", async () => {
+    // A year past 9999 is a legal Postgres date, written by the listing's owner.
+    for (const bad of [{ event_date: '10000-01-01' }, { event_date: '0044-03-15 BC' }]) {
+      stub([listing(2), listing(1, bad)]);
+      const response = await hit();
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.count).toBe(1);
+      expect(body.listings.map((l: { id: string }) => l.id)).toEqual([id(2)]);
+    }
+  });
+
   test('the database must honor both the page size and cursor boundary', async () => {
     stub([listing(3), listing(2), listing(1)]);
     expect((await hit('?limit=1')).status).toBe(503);

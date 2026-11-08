@@ -455,6 +455,16 @@ function listingPagination(params) {
   }
 }
 
+/**
+ * The fields the database itself assigns: id, created_at and status. A row
+ * failing these is upstream corruption, and refusing the page is right.
+ */
+function validListingKey(row) {
+  return !!row && typeof row === 'object' && !Array.isArray(row) &&
+    typeof row.id === 'string' && LISTING_ID.test(row.id) &&
+    row.status === 'active' && validListingTime(row.created_at);
+}
+
 function validPublicListing(row) {
   if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
   const date = typeof row.event_date === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(row.event_date);
@@ -526,7 +536,7 @@ async function fetchActivePage(env, { limit, cursor }, maximumBytes) {
   });
   if (!res.ok) throw new Error('Public database request failed');
   const rows = await boundedPublicJson(res, maximumBytes);
-  if (!Array.isArray(rows) || rows.length > limit + 1 || !rows.every(validPublicListing) ||
+  if (!Array.isArray(rows) || rows.length > limit + 1 || !rows.every(validListingKey) ||
       new Set(rows.map(row => row.id)).size !== rows.length ||
       rows.some((row, index) => {
         const previous = index === 0 ? cursor : rows[index - 1];
@@ -565,9 +575,22 @@ async function listingsJson(request, env, url, options = {}) {
   } catch {
     return respond({ error: 'market_unavailable', message: 'Active listings are temporarily unavailable. Retry this page.' }, 503);
   }
-  const rows = fetched.rows.slice(0, pagination.limit);
-  const hasMore = fetched.total > rows.length;
-  const nextCursor = hasMore ? encodeListingCursor(rows[rows.length - 1]) : null;
+  const page = fetched.rows.slice(0, pagination.limit);
+  // The rest of a row is written by its owner. One listing whose owner stored
+  // a value this API cannot represent (an event_date in the year 10000 is a
+  // legal Postgres date) used to fail validation for the whole page, and a
+  // fresh listing sorts onto page one -- so a single user could take public
+  // discovery down for every visitor. Skip that row instead. Paging still
+  // walks the database's own order, so the cursor comes from the page as
+  // fetched, not from what was shown.
+  const rows = page.filter(validPublicListing);
+  // A page where nothing validates is systemic, not one owner's row: keep
+  // failing closed there, so upstream corruption never reads as an empty market.
+  if (page.length && !rows.length) {
+    return respond({ error: 'market_unavailable', message: 'Active listings are temporarily unavailable. Retry this page.' }, 503);
+  }
+  const hasMore = fetched.total > page.length;
+  const nextCursor = hasMore ? encodeListingCursor(page[page.length - 1]) : null;
   const nextUrl = hasMore ? new URL('/api/listings.json', url.origin) : null;
   if (nextUrl) {
     nextUrl.searchParams.set('limit', String(pagination.limit));
@@ -938,6 +961,10 @@ async function rpc(cfg, name, args) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(args),
+    // This request carries the service-role key. A redirect from a
+    // misconfigured SUPABASE_URL must not forward it anywhere else; every
+    // other module that sends a key already refuses to follow one.
+    redirect: 'error',
     signal: AbortSignal.timeout(10000),
   });
   if (res.status === 404) {
@@ -1140,20 +1167,33 @@ export default {
       // The feed renders client-side, so its prerendered body is one
       // character -- and it is the page most likely to be crawled. Inject the
       // current market into it, cached like the listing pages.
-      if (url.pathname === '/' || url.pathname === '/feed') {
+      if ((url.pathname === '/' || url.pathname === '/feed') && request.method === 'GET') {
         const key = new Request(`${url.origin}/__feed_seo${url.pathname}`, { method: 'GET' });
         const hitCache = await caches.default.match(key);
         if (hitCache) return hitCache;
 
+        // `asset` was fetched with the visitor's own request, so it can be a
+        // body-less 304 (a browser revalidating with the ETag we sent it).
+        // This page is cached under one key for everybody, so it must be built
+        // from a plain GET of the template and stored only when that is a real
+        // 200 -- otherwise one revalidation, or a HEAD, cached an empty
+        // homepage for every visitor at that edge for a minute.
+        const template = await env.ASSETS.fetch(new Request(`${url.origin}${url.pathname}`, { method: 'GET' }));
+        if (template.status !== 200) return asset;
+
         const rows = await fetchActive(env, 100);
         // With nothing to say, say nothing rather than an empty list.
-        if (!rows.length) return asset;
+        if (!rows.length) return template;
 
-        const enriched = withFeedData(asset, rows, url.origin);
+        const enriched = withFeedData(template, rows, url.origin);
         const out = new Response(enriched.body, {
           status: 200,
           headers: enriched.headers,
         });
+        // The body is no longer the asset, so the asset's ETag must not
+        // validate it: a browser revalidating with it would get a 304 for a
+        // page it never received.
+        out.headers.delete('etag');
         out.headers.set('cache-control', 'public, max-age=0, s-maxage=60');
         ctx.waitUntil(caches.default.put(key, out.clone()));
         return out;
@@ -1173,7 +1213,10 @@ export default {
     // an empty screen.
     if (rest.length === 0 && tail && Object.hasOwn(DYNAMIC, head)) {
       const target = new URL(DYNAMIC[head], url.origin);
-      const hit = await env.ASSETS.fetch(new Request(target, { headers: request.headers }));
+      // A plain GET: forwarding the visitor's If-None-Match turned a browser's
+      // ordinary revalidation into a 304 here, which fails `hit.ok` and was
+      // answered with the 404 page.
+      const hit = await env.ASSETS.fetch(new Request(target, { method: 'GET' }));
 
       if (hit.ok) {
         // Serve the template under the URL the visitor actually requested: the
