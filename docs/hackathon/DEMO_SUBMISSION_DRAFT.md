@@ -1,12 +1,16 @@
 # Submission copy and recording draft
 
-Draft only. No video has been recorded/uploaded and no entry has been submitted.
+Release review: November 8, 2026 UTC. Draft only. No video has been
+recorded/uploaded and no entry has been submitted by the release role.
 Use claims below only after their corresponding end-to-end proof is recorded in
 [VERIFICATION_DEMO.md](VERIFICATION_DEMO.md) and the authoritative tracker.
+The live Devpost form has not been inspected; these are prepared content fields,
+not a claim that its current field labels or length limits have been verified.
+Access, rules and human gates: [RELEASE_READINESS.md](RELEASE_READINESS.md).
 
 ## Project fields
 
-**Title:** SellWant: ticket negotiation with human limits and PayPal sandbox
+**Title:** SellWant: bounded ticket agents, PayPal handoff
 
 **Pitch:** Review your ticket-trading limits, let AI negotiate public offers,
 then authorize PayPal sandbox payment and capture only after both people confirm
@@ -34,11 +38,55 @@ Worker, OpenAI Responses with structured outputs, authenticated MCP and PayPal
 sandbox Orders/Payments APIs. List only integrations demonstrated in the final
 recording. Mocked transport tests are engineering evidence, not payment proof.
 
+**Inspiration:** Ticket trading repeats the same question: can these two people
+agree within their own price limits? We extend an existing public-offer
+marketplace so AI can handle that negotiation while each person keeps control
+of their terms, checkout and handoff.
+
+**How we built it:** The existing Expo app and Worker share guarded PostgreSQL
+operations. Structured OpenAI output proposes terms and negotiation actions;
+transactions enforce approved amounts, expiry, revocation, rounds and roles.
+Leased watcher jobs persist their operation and result. A separate sandbox
+payment ledger binds the locked deal to PayPal resources and records approval,
+authorization, both handoffs, capture and reconciliation separately.
+
+**Challenges:** Preserving an inherited database contract; separating a model's
+proposal from a person's authority; resuming an interrupted action without
+duplicating a trade; and keeping an uncertain payment locked until provider
+reconciliation.
+
+**What we learned:** A successful API request, browser return and completed
+payment are different observations. The UI and database must preserve those
+differences. Database and mocked-provider checks help establish invariants, but
+the complete demo still needs genuine human and remote-provider evidence.
+
+**Current limitations:** Sandbox only. No production merchant onboarding or
+ticket-authenticity guarantee. Actual integrated capture, two-person browser
+approvals, notification receipt, clean judge access and final video remain
+unverified at this draft checkpoint. Replace this sentence only when the
+tracker records stronger evidence.
+
+**Next:** Finish the verified end-to-end sandbox journey and independent judge
+setup, then evaluate production merchant onboarding and operational monitoring.
+
+**Project links:**
+
+- Source candidate: <https://github.com/luquibotbol/sellwant>. Connector access
+  returns 404. Authenticated GitHub CLI confirms this repository is private;
+  anonymous access returns 404. Public source publication remains required.
+- Current work branch: `hackathon/paypal-ai-2026`. Pin the final verified
+  release commit after manager publication; do not submit an unpublished SHA.
+- Developer runtime target: `http://127.0.0.1:8788`. This is not a hosted judge URL.
+- Judge instructions: pending public bootstrap and clean-browser verification.
+- Video: pending genuine recording, review and public YouTube URL.
+- Entry: pending authorized Devpost session and required human attestations.
+
 ## Recording narration
 
 Target 2:40 including the human checkout/handoff clips. Record live evidence
 first; edit out waiting without changing the actual order of transitions. Do
 not narrate an unverified path as complete.
+Clip inventory and assembly: [VIDEO_ASSEMBLY.md](VIDEO_ASSEMBLY.md).
 
 | Segment | Planned narration and screen |
 | --- | --- |
@@ -54,8 +102,8 @@ not narrate an unverified path as complete.
 
 | Artifact | Status / final evidence |
 | --- | --- |
-| Public repository URL and source commit | Pending manager check; MIT license exists locally |
-| Judge URL or complete runnable setup | Local fixture script exists; runtime/judge journey still pending |
+| Public repository URL and source commit | Candidate above is private; authenticated metadata confirms MIT; anonymous access returns 404 |
+| Judge URL or complete runnable setup | No isolated hosted URL found; private schema exports are still required by current bootstrap, so clean-checkout instructions are incomplete |
 | Human-approved buyer/seller journey | Pending real browser/human steps |
 | Integrated authorization/handoff/capture | Pending real sandbox/human proof |
 | Independent cancel/void and timeout/unknown recovery | Local ledger tests pass; integrated provider journey still pending |
@@ -63,6 +111,16 @@ not narrate an unverified path as complete.
 | Public YouTube URL, under-three-minute final video | Not recorded or uploaded |
 | Team names, eligibility, ownership and final entry text | Human review pending |
 | Submission confirmation / entry URL | Not submitted |
+
+## Final entry procedure
+
+Once the remaining evidence and human attestations exist, use the authorized
+Devpost account to inspect the actual required fields and limits, enter the
+verified copy and links, attach genuine images, and review the saved draft.
+Confirm the final repository and video from a logged-out browser, verify the
+judge instructions without administrator access, then submit under the user's
+existing authorization. Record the resulting entry URL and explicit submission
+confirmation; a saved portfolio draft is not proof of hackathon entry.
 
 Recheck current official rules before publishing. Remove login details,
 credentials, capabilities, contacts and ticket codes from all public artifacts.

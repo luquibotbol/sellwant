@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Real scheduled AI -> guarded trade proof on the fixed isolated local runtime.
 
-python3 scripts/prove-watcher-local.py prepare
+python3 scripts/prove-watcher-local.py launch --browser-closed-at UTC_TIMESTAMP --browser-close-evidence EVIDENCE_PATH --browser-close-scope dedicated_browser_session
 # The preparation client has exited. Wait for the separately owned scheduler.
 python3 scripts/prove-watcher-local.py check
 python3 scripts/prove-watcher-local.py cleanup
@@ -13,12 +13,14 @@ handoff, provider-key access, manual scheduler tick or hosted deployment proof.
 Never runs while another watch is active; coordinate with the manager first.
 """
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -29,6 +31,10 @@ PRIVATE = ROOT / '.local/ai/watcher-runtime-proof.json'
 ORIGIN = 'http://127.0.0.1:8788'
 TOOLS = ['get_mandate', 'get_deal', 'place_offer', 'accept_offer']
 UUID = re.compile(r'^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+
+
+def timestamp():
+    return datetime.now(timezone.utc).isoformat()
 
 
 def module(name, filename):
@@ -106,6 +112,7 @@ def prepare(h):
     enrollment = t.uid()
     operation = t.uid()
     state = {'phase': 'preparing', 'synthetic_principals': True, 'human_ui_approval': False,
+        'preparation_pid': os.getpid(), 'preparation_started_at': timestamp(),
         'hosted': False, 'fixture': {k: v for k, v in f.items() if k != 'setup'},
         'container_id': container_id, 'runtime_before': before, 'enrollment_key': enrollment,
         'buyer_operation_key': operation,
@@ -134,10 +141,11 @@ def prepare(h):
             'expires_at': state['watch_expires_at']}, h.jwt(f['owner']))
         t.must(UUID.fullmatch(result.get('id', '')) and result.get('mandate_id') == state['seller_mandate'] and result.get('state') == 'active',
                'Watch enrollment response is invalid; reconcile the private journal.')
-        state.update({'phase': 'enrolled', 'watch_id': result['id']})
+        state.update({'phase': 'enrolled', 'watch_id': result['id'], 'prepared_at': timestamp()})
         save(state)
         print(json.dumps({'phase': 'enrolled', 'listing_id': f['listing'], 'watch_id': result['id'],
             'runtime_instance': before['instance'], 'scheduled_runs_before': before['scheduled_runs'],
+            'preparation_pid': state['preparation_pid'], 'prepared_at': state['prepared_at'],
             'preparation_client_will_exit': True, 'human_ui_approval': False, 'hosted': False}), flush=True)
     except Exception:
         # Keep the journal/fixtures for reconciliation. No blind replacement
@@ -152,17 +160,23 @@ def check(h, state):
     t.must(after['instance'] == state['runtime_before']['instance'], 'Scheduler process restarted; original continuity is unproven.')
     f = state['fixture']
     result = t.parsed(h.db.sql("SELECT json_build_object("
-        "'watch',(SELECT jsonb_build_object('id',id,'state',state,'last_error',last_error,'updated_at',updated_at) FROM public.agent_watches WHERE enrollment_key=" + t.q(state['enrollment_key']) + "),"
-        "'operations',(SELECT coalesce(jsonb_agg(jsonb_build_object('operation_key',o.operation_key,'status',o.status,'proposal',o.proposal,'result',o.result)),'[]'::jsonb)"
+        "'observed_at',clock_timestamp(),"
+        "'watch',(SELECT jsonb_build_object('id',id,'state',state,'last_error',last_error,'created_at',created_at,'updated_at',updated_at) FROM public.agent_watches WHERE enrollment_key=" + t.q(state['enrollment_key']) + "),"
+        "'operations',(SELECT coalesce(jsonb_agg(jsonb_build_object('operation_key',o.operation_key,'status',o.status,'proposal',o.proposal,'result',o.result,'created_at',o.created_at,'updated_at',o.updated_at)),'[]'::jsonb)"
         " FROM public.agent_watch_operations o JOIN public.agent_watches w ON w.id=o.watch_id WHERE w.enrollment_key=" + t.q(state['enrollment_key']) + "),"
-        "'deals',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'state',state,'buyer_id',buyer_id,'seller_id',seller_id,'cents',locked_price_cents)),'[]'::jsonb)"
+        "'deals',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'state',state,'buyer_id',buyer_id,'seller_id',seller_id,'cents',locked_price_cents,'locked_at',locked_at)),'[]'::jsonb)"
         " FROM public.lock_ins WHERE listing_id=" + t.q(f['listing']) + "),"
         "'mandates',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'side',side,'status',status,'bound_cents',bound_cents,'rounds_used',rounds_used,'approved_by',approved_by,'owner_id',owner_id,'deal_id',deal_id)),'[]'::jsonb)"
         " FROM public.agent_mandates WHERE listing_id=" + t.q(f['listing']) + "),"
-        "'actions',(SELECT coalesce(jsonb_agg(jsonb_build_object('mandate_id',mandate_id,'operation_key',operation_key,'status',status,'model',model,'deal_id',deal_id,'offer_id',offer_id)),'[]'::jsonb)"
+        "'actions',(SELECT coalesce(jsonb_agg(jsonb_build_object('mandate_id',mandate_id,'operation_key',operation_key,'status',status,'model',model,'deal_id',deal_id,'offer_id',offer_id,'created_at',created_at)),'[]'::jsonb)"
         " FROM public.mandate_actions WHERE mandate_id IN (SELECT id FROM public.agent_mandates WHERE listing_id=" + t.q(f['listing']) + ")));") )
     state['runtime_after'] = after
     state['database_evidence'] = result
+    state.setdefault('checks', []).append({'observed_at': result['observed_at'],
+        'runtime_instance': after['instance'], 'scheduled_runs': after['scheduled_runs'],
+        'watch_state': result['watch']['state'] if result['watch'] else None,
+        'operation_count': len(result['operations']), 'deal_count': len(result['deals']),
+        'action_count': len(result['actions'])})
     save(state)
     if result['watch'] and result['watch']['state'] in ('blocked', 'stopped'):
         print(json.dumps({'phase': 'review_required', 'watch_state': result['watch']['state'],
@@ -189,11 +203,27 @@ def check(h, state):
     t.must(len(result['actions']) == 2 and all(a['status'] == 'succeeded' for a in result['actions']) and
         any(a['operation_key'] == op['operation_key'] and a['deal_id'] == deal['id'] and a['model'] == op['proposal']['model'] for a in result['actions']),
         'Guarded trading receipts do not match the persisted generated proposal.')
-    state['phase'] = 'verified'
+    # These observations are added only after the preparation subprocess has
+    # actually returned and the browser owner has observed the session close.
+    # Never infer either boundary from an absent request or a scheduled counter.
+    exited = state.get('preparation_process_exit')
+    closed = state.get('browser_close_observation')
+    t.must(isinstance(exited, dict) and exited.get('pid') == state['preparation_pid'] and exited.get('returncode') == 0
+           and isinstance(closed, dict) and closed.get('observed_at') and closed.get('evidence'),
+           'Scheduled action is persisted; record observed client exit/browser close before claiming closure proof.')
+    boundaries = [datetime.fromisoformat(exited['observed_at']), datetime.fromisoformat(closed['observed_at'])]
+    t.must(all(value.tzinfo is not None for value in boundaries), 'Closure observations must include their timezone.')
+    t.must(datetime.fromisoformat(op['created_at']) > max(boundaries) and datetime.fromisoformat(deal['locked_at']) > max(boundaries),
+           'The scheduled operation/deal did not occur after both observed closure boundaries.')
+    full_close = closed.get('kind') == 'dedicated_browser_session'
+    state['phase'] = 'verified' if full_close else 'partially_verified'
     save(state)
-    print(json.dumps({'phase': 'verified', 'model': op['proposal']['model'], 'response_id': op['proposal']['response_id'],
+    print(json.dumps({'phase': state['phase'], 'model': op['proposal']['model'], 'response_id': op['proposal']['response_id'],
         'action': op['proposal']['action'], 'deal_id': deal['id'], 'amount_cents': deal['cents'],
         'same_runtime_instance': True, 'scheduled_runs': after['scheduled_runs'],
+        'runtime_started_at': after['started_at'], 'operation_created_at': op['created_at'],
+        'deal_locked_at': deal['locked_at'], 'preparation_process_exit_at': exited['observed_at'],
+        'browser_closed_at': closed['observed_at'], 'browser_session_closed': full_close,
         'human_ui_approval': False, 'hosted': False, 'journal': str(PRIVATE.relative_to(ROOT))}))
 
 
@@ -209,10 +239,37 @@ def cleanup(h, state):
     print('Owned watcher fixtures cleaned; private model/runtime evidence preserved. No runtime or provider mutation requested.')
 
 
+def launch(closed_at, evidence, scope):
+    t.must(closed_at and evidence and scope in ('dedicated_browser_session', 'task_tab'),
+           'Observed browser close timestamp/evidence/scope are required before launch.')
+    closed = datetime.fromisoformat(closed_at)
+    t.must(closed.tzinfo is not None and closed <= datetime.now(timezone.utc), 'Browser close must be an observed timezone-aware past timestamp.')
+    child = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), 'prepare'], cwd=ROOT)
+    result = child.wait()
+    exited_at = timestamp()
+    t.must(result == 0, 'Preparation client failed; preserve and reconcile its journal before another attempt.')
+    state = load()
+    t.must(state['preparation_pid'] == child.pid, 'Preparation journal does not belong to the observed child.')
+    state['preparation_process_exit'] = {'pid': child.pid, 'returncode': result, 'observed_at': exited_at}
+    state['browser_close_observation'] = {'observed_at': closed_at, 'evidence': evidence, 'kind': scope,
+        'scope': 'Synthetic fixture enrollment uses no browser approval; closure scope is recorded separately.'}
+    save(state)
+    print(json.dumps({'phase': 'preparation_client_exited', 'pid': child.pid, 'returncode': result,
+        'observed_at': exited_at, 'browser_closed_at': closed_at, 'human_ui_approval': False}), flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('prepare', 'check', 'cleanup'))
+    parser.add_argument('action', choices=('launch', 'prepare', 'check', 'cleanup'))
+    parser.add_argument('--browser-closed-at')
+    parser.add_argument('--browser-close-evidence')
+    parser.add_argument('--browser-close-scope', choices=('dedicated_browser_session', 'task_tab'))
     args = parser.parse_args()
+    if args.action == 'launch':
+        launch(args.browser_closed_at, args.browser_close_evidence, args.browser_close_scope)
+        return
+    t.must(args.browser_closed_at is None and args.browser_close_evidence is None and args.browser_close_scope is None,
+           'Browser observations belong only to launch.')
     h = t.Harness('watcher-runtime-local', ('agent_watches', 'agent_watch_operations'))
     if args.action == 'prepare':
         prepare(h)

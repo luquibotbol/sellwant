@@ -1,10 +1,10 @@
 # SellWant × PayPal execution plan
 
-Authoritative tracker. Started October 28, updated November 5, 2026. Branch `hackathon/paypal-ai-2026`; baseline `618a3a01`. [Verified baseline and setup](BASELINE.md).
+Authoritative tracker. Started October 28, updated November 8, 2026 UTC. Branch `hackathon/paypal-ai-2026`; baseline `618a3a01`. [Verified baseline and setup](BASELINE.md).
 
 **Latest user clarification:** this repository is Lucas's handoff. No separate prototype repository is required; implement the missing product MCP here using the verified persistent trading boundaries. Earlier notes requesting a separate prototype are superseded. Private `sellwant/.env.llm` now exists (0600, Git-ignored). The user supplied an OpenAI key there; a read-only model-access request returned HTTP 200 and confirmed available candidates. Model selection/text generation and deployed secret configuration are not yet verified. The PayPal void checkout was approved, authorized and voided successfully; the capture checkout still awaits buyer approval and later explicit simulated handoff.
 
-**Latest manager checkpoint, November 6 at 05:55 UTC:** real OpenAI drafting and an actual bounded acceptance proposal are verified. The existing outbox prerequisite and migrations `005`/`006`/`007` are applied only locally; 64 payment and 65 watcher SQL/REST/race checks pass. Ordered replay exactly matches all 66 app functions; typecheck and 291 offline tests pass. Runtime startup failed in two distinct approaches, triggering the handoff's required pause. The second failure is diagnosed: `git archive HEAD:sellwant` ran from the app subdirectory and returned an empty archive; a read-only repository-root comparison produces 185 files including `package.json`. All roles stopped and work/logs are preserved. No runtime, browser journey, human approval or integrated capture is claimed. Details below supersede the older funding pause.
+**Latest manager checkpoint, November 8 at 04:49 UTC — required pause:** archive repair and independent local runtime startup are verified; scheduler counters advanced 1→4 on the same instance. Fresh typecheck and 291 offline tests/1,932 assertions pass. Two distinct safe-browser-control approaches failed (native desktop interference; unavailable isolated browser host), activating the user's handoff stopping rule. All four roles stopped safely; no watcher proof fixture was launched. Runtime remains available at `http://127.0.0.1:8788`. The old capture order remains unreadable/financially unresolved; void is reverified. Browser journey, email receipt, integrated capture, public judge access, video and submission remain incomplete. Public-checkout bootstrap is designed but unwritten. All existing user changes and payment journals are preserved; no commit, push, production deployment or financial mutation occurred.
 
 User's current request authorizes milestone implementation. Work one coherent milestone at a time. No production deployment, data modification or main push/merge. Preserve existing marketplace behavior. A milestone requiring a real external integration is incomplete until that integration is demonstrated.
 
@@ -130,9 +130,9 @@ States: planned = design only; implemented = code exists; verified = stated chec
 | M0 tooling and deadline research | Verified documentation | Official URLs/setup matrix; Codex local subcommands checked; no new account connection claimed |
 | M0 local baseline | Verified with limits | 87 offline tests, normalization/PNG checks, typecheck and placeholder web build pass; DB/browser/payment not run |
 | M1 adapter, harness and local safety checks | Verified locally; external gate still blocked | Server-only sandbox adapter, private resumable journal/lock, CLI; 33 payment tests, 120 total offline tests; pinned Bun 1.3.14 passes; typecheck/build evidence below |
-| M1 actual sandbox authorize/capture/void | Authorize/void verified; old capture order now unreadable | November 6 readback confirms authorization `14F6288189074490Y` VOIDED for 1665 cents/USD with no captures. Capture order `0M315443YG505872E` now returns HTTP 404 `INVALID_RESOURCE_ID`; its remote state is unverified and expired request key/journal are preserved. Buyer availability/disposition of this order gate fresh checkout. No handoff/capture is claimed |
+| M1 actual sandbox authorize/capture/void | Authorize/void verified; capture blocked | November 8 readback reverified authorization `14F6288189074490Y` VOIDED for 1665 cents/USD with no captures. Capture order `0M315443YG505872E` still returns HTTP 404 `INVALID_RESOURCE_ID`; its financial disposition is unknown and expired request key/journal are preserved. Buyer availability and authoritative disposition of this order gate fresh checkout. No handoff/capture is claimed. [Current provider evidence](PAYMENT_PROOF.md) |
 | M2 database/prototype integration | Database and MCP verified locally; human browser journey incomplete | Existing 42 core, 65 mandate, 42 REST and 39 privacy checks pass. New capability context passes 55 real SQL/REST checks; official MCP client passes 26 real Worker/PostgREST groups including public offer discovery, counter/accept, restart/idempotency and revocation. All four migrations replay to 46 identical app definitions. Typecheck, 230 offline tests and isolated Worker dry-run pass. Human review UI remains disabled by default and browser-unverified; hosted MCP/client compatibility remains unverified. No separate Lucas repository is required |
-| M3 AI/watcher/notifications/full handoff | Real model + local SQL verified; paused at runtime startup | Actual structured draft and correct 1665-cent acceptance proposal verified. Applied outbox +005/006/007; 129 independent payment/watcher checks and exact 66-function replay pass. UI/shared API/outbox/cron wiring exists. Durable service failed to start in two approaches; browser/human approval, real notifications and integrated payment/handoff remain unverified |
+| M3 AI/watcher/notifications/full handoff | Real model + local SQL verified; isolated runtime started; stopped at browser access | Actual Worker API/scheduled handlers plus Expo export run independently. Same instance's scheduler advanced 1→4; no real persisted scheduled-action/closure proof was launched before the required pause. Existing 129 payment/watcher checks and exact 66-function replay retain their historical scope. Browser/human approval, real notifications and integrated payment/handoff remain unverified |
 | M4 hardened demo/submission | Local reliability checks and demo setup verified; deliverables incomplete | Guarded repeatable setup produces three synthetic logins/two listings with private credentials; 291 offline tests and core/privacy/MCP regressions pass. Verification and submission narration drafts exist. Two-user browser journey, durable runtime proof, real capture, functional judge access, video and submission remain |
 
 ## M1 runbook and milestone evidence
@@ -543,3 +543,126 @@ untracked user brief and pre-existing handoff edits are excluded. Fresh offline
 checks pass291 tests/1932 assertions plus13 normalization and5 QR decode checks.
 Fresh typecheck also passed; its initial local file-read delay did not require a
 source change. The known runtime archive-path bug remains recorded above.
+
+### November 8 resumed archive/runtime milestone
+
+Read the attached resume request and all nine required documents. Three native
+workers started first; the fourth release role replaced the terminal payment
+role within four total slots. No nested workers. Runtime/proof scripts,
+browser/UI evidence and payment/release documents have exclusive owners; manager
+retains shared integration, migrations, commits and this tracker. Original demo
+fixtures and private financial journals are preserved.
+
+**Task 1 verified locally:** `stable_source()` now archives from repository root
+and checks nonempty `package.json`/`bun.lock`, parses the expected manifest and
+records both hashes before a frozen installation. An extraction-only check
+found 188 files with the current overlay. The stable installation, Expo export
+(21 routes) and bundled Worker succeeded. The first running Node host exposed
+the absent Cloudflare `caches.default`/`HTMLRewriter` globals through HTTP 503
+browser routes. The owned local adapter now serves the real Expo static and
+dynamic templates while executing unchanged Worker API/scheduled handlers.
+It explicitly reports that edge HTML rewriting is not exercised; no production
+Worker behavior was changed. This was one diagnosed local-adapter repair, not
+two failed alternative approaches to a blocker.
+
+The corrected runtime started at `2026-11-08T04:41:54.684Z`, container
+`d3892326fcdf6aaa88717f6721879289e27b98b301e75b920c323c427048cb07`, instance
+`79fe3e06-cbd3-48e6-b69a-5c93d9f16103`, loopback origin
+`http://127.0.0.1:8788`. The initiating launcher exited. Manager independently
+read scheduler counter 1, successful last run, exact instance and HTTP 200 for
+the existing capture listing. This does not yet prove an AI trade after browser
+closure or hosted availability. The earlier owned container was stopped before
+the corrected host replaced it; continuity proof will use only this final one.
+
+**Checks:** fresh `bun run typecheck` exited 0; `bun run test:offline` passed
+291 tests/1,932 assertions. Local host syntax and current diff whitespace checks
+pass. No full shared-database suite ran. Two fresh standalone private browser
+windows are available; no human mandate/access/payment/handoff approval is
+claimed. Runtime watcher fixtures have the exclusive mutation window.
+
+**Other tasks:** [Payment reconciliation](PAYMENT_PROOF.md) reverified the void
+and preserved all four journal hashes, private permissions and zero locks. The
+capture order remains unreadable; no replacement operation was generated.
+[Release checks](RELEASE_READINESS.md) verify the November 12 noon PST cutoff,
+private source/MIT license and missing mail/host/account access. Submission text
+and [video assembly plan](VIDEO_ASSEMBLY.md) exist; footage, public access and
+submission do not. A standalone source bootstrap is being implemented; current
+private-CSV recovery remains insufficient as public judge instructions.
+
+### November 8 browser-access stopping checkpoint
+
+The runtime repair succeeded. The next blocker was safe isolated browser access,
+with two genuinely different approaches:
+
+1. Hypothesis: native Chrome Incognito and Brave Private can support the two
+   synthetic sessions. Both private windows were observed. The app's anonymous
+   discovery appeared through CUA accessibility state, but actual concurrent
+   desktop use repeatedly changed the target app/tab and CUA rejected actions
+   as app-changed. No credentials or approvals were entered. A screenshot
+   captured the unrelated app after a tab switch and was quarantined/excluded;
+   it is not demo evidence. Safe login, journey and browser closure failed.
+2. Hypothesis: a separately created hidden in-app browser can avoid native
+   desktop contention. The documented creation API immediately returned
+   `The browser access host is unavailable`; fresh inventory also exposed no
+   browser provider. No independent browser session was established.
+
+The manager applied the handoff's explicit two-attempt rule: stop all four
+roles, preserve work/logs and pause for the user's decision. No third browser
+approach, watcher fixture, model generation, new order, migration, deployment,
+email or recording follows this checkpoint. QuickTime launched, but inspection
+timed out; no recording was started. All role-owned command/tool handles are
+terminal. Unrelated browser tabs/windows were preserved.
+
+| Requested task | Status at stop | Evidence / remaining gate |
+| --- | --- | --- |
+| 1. Archive fix and runtime | Verified locally | Correct repository-root archive, package/lock preflight, stable install, 21 routes, real Worker bundle; root/event/signin/discovery HTTP 200 and unauthenticated MCP 401. Same independent runtime retained; hosted edge rendering is outside this local adapter |
+| 2. Watcher after client/browser closure | Partially verified | Same runtime instance scheduled 1→4 successfully through `2026-11-08T04:44:54.874Z`. Proof script now records real child exit and operation/deal timestamps with explicit browser-closure scope, but was not executed. No fixture mandate approval, active proof watch or generated deal was introduced |
+| 3. Two-user browser journey and clips | Blocked | Anonymous discovery observed via accessibility only; zero usable screenshots/video, no login, account-switch verification, human approval or browser closure. Two control approaches failed as above |
+| 4. Sandbox capture sequence | Partially verified | Separate void reverified; capture order 404 remains unknown. All four private journal hashes/permissions unchanged and zero locks. Buyer availability, authoritative old-order disposition, checkout approval and two separate human handoffs remain gates |
+| 5. Release evidence/submission | Partially verified | Official rules/deadline, private source/MIT license, submission copy and video assembly plan checked. No authorized mail/receipt or isolated hosting; no public source, complete clean bootstrap, video, account attestations or submission |
+
+The retained runtime is container
+`d3892326fcdf6aaa88717f6721879289e27b98b301e75b920c323c427048cb07`, instance
+`79fe3e06-cbd3-48e6-b69a-5c93d9f16103`, with private build
+`.local/hackathon-runtime/build-1147a831f7ad48739fa45f4bad5c743c`.
+No runtime restart or new read followed the final worker stop report. It is an
+independent local service, not a live worker tool handle or hosted deployment.
+
+Public bootstrap work reached a reviewed design/resource check only: fixed
+separate proof project `sellwant-hackathon-judge-2026`, API56321/DB56322/mail56324,
+cached pinned service images. No bootstrap source, fresh container, network or
+migration was created. Existing private CSVs/generated recovery artifacts stay
+private. New release/readiness/video documents and the three runtime/proof
+script edits remain uncommitted; the user's handoff edits, brief and caches are
+preserved.
+
+**Evidence hygiene:** the runtime worker reported an overbroad private-fixture
+inventory emitted existing local synthetic demo passwords into its tool output.
+That output must be excluded from all public/demo artifacts. No passwords are
+copied here. Rotate those disposable credentials and revoke their sessions on
+an authorized resume before browser login/recording; rotation was not attempted
+after the stop instruction.
+
+**Impact and two alternatives:** browser approval/closure, actual watcher trade,
+integrated payment and genuine clips cannot proceed safely on the current
+surface. Recommended: restore the dedicated browser access host, then resume
+the same existing runtime/proof without altering approval boundaries.
+Alternative: reserve an uninterrupted desktop interval for the native isolated
+sessions, then resume. Either requires the user's decision under the standing
+rule. Other human gates remain documented in [release readiness](RELEASE_READINESS.md)
+and [payment proof](PAYMENT_PROOF.md); they are not inferred satisfied by a resume.
+
+### November 8 requested GitHub branch checkpoint
+
+The user requested publishing the preserved checkpoint to GitHub. Publish only
+`hackathon/paypal-ai-2026`; no main update, merge, deployment or workflow dispatch.
+This publication request does not resume the paused implementation goal or
+establish any missing human approval, payment, browser or release evidence.
+
+Reviewed the three runtime/proof script changes and six evidence/release
+documents. Fresh Python AST checks, Node syntax and diff whitespace checks pass.
+The existing 291-test/typecheck results above retain their recorded scope; the
+expanded watcher closure proof remains unexecuted. Private credentials, journals,
+screenshots, schema exports, generated caches, the user's untracked brief and
+pre-existing handoff edits are excluded. The remote hackathon branch did not
+exist at the pre-push read; publication creates that branch without force.

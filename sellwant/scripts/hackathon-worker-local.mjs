@@ -37,6 +37,25 @@ env.ASSETS = { async fetch(request) {
   }
   return new Response('Not found', { status: 404 });
 } };
+// Node does not implement Cloudflare's HTMLRewriter or edge cache. Serve the
+// real Expo export locally, including its exact dynamic templates, while API
+// and scheduled requests still execute the bundled Worker unchanged. This is
+// browser/runtime proof, not hosted SEO/edge-cache equivalence.
+const dynamic = { deal: '/deal/[id].html', edit: '/edit/[id].html',
+  event: '/event/[id].html', u: '/u/[id].html' };
+async function browserAsset(request) {
+  const asset = await env.ASSETS.fetch(request);
+  if (asset.status !== 404) return asset;
+  const url = new URL(request.url);
+  const [, head, tail, ...rest] = url.pathname.split('/');
+  if (rest.length === 0 && tail && Object.hasOwn(dynamic, head)) {
+    const target = new Request(new URL(dynamic[head], origin), { method: request.method });
+    const page = await env.ASSETS.fetch(target);
+    if (page.ok) return page;
+  }
+  const missing = await env.ASSETS.fetch(new Request(new URL('/+not-found.html', origin), { method: request.method }));
+  return new Response(missing.body, { status: 404, headers: missing.headers });
+}
 async function body(request, limit) {
   const chunks = []; let size = 0;
   for await (const chunk of request) {
@@ -102,13 +121,17 @@ const server = createServer(async (request, response) => {
       response.writeHead(403); response.end(); return;
     }
     if (request.method === 'GET' && url.pathname === '/_local/runtime' && !url.search) {
-      await send(response, Response.json({ ...state, kind: 'isolated_local_scheduler', hosted: false },
+      await send(response, Response.json({ ...state, kind: 'isolated_local_scheduler', hosted: false,
+        browser_assets: 'expo_static_dynamic_templates', edge_html_rewriter: false },
         { headers: { 'cache-control': 'no-store' } })); return;
     }
     const data = ['GET', 'HEAD'].includes(request.method) ? undefined : await body(request, 64 * 1024);
     const incoming = new Request(url, { method: request.method, headers: request.headers, body: data });
     const pending = [];
-    const result = await worker.fetch(incoming, env, { waitUntil: p => pending.push(p) });
+    const workerRoute = url.pathname === '/mcp' || url.pathname === '/sitemap.xml' || url.pathname.startsWith('/api/');
+    const result = workerRoute
+      ? await worker.fetch(incoming, env, { waitUntil: p => pending.push(p) })
+      : await browserAsset(incoming);
     await send(response, result);
     await Promise.allSettled(pending);
   } catch {

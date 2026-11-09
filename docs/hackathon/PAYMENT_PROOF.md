@@ -1,8 +1,60 @@
 # PayPal sandbox proof
 
-Latest provider reconciliation: November 6, 2026 (UTC). Sandbox only; no
+Latest provider reconciliation: November 8, 2026 (UTC). Sandbox only; no
 production or marketplace mutation. Credentials, payer information and approval
 links are excluded from this record.
+
+## November 8: read-only reconciliation; capture remains unresolved
+
+The requested fresh check used the existing private sandbox configuration and
+immutable journal expectations. No journal was written and no financial or
+marketplace operation was requested.
+
+| Resource | Current provider evidence |
+| --- | --- |
+| Capture order `0M315443YG505872E` | At `2026-11-08T04:35:05.156Z`, GET returned HTTP 404, `INVALID_RESOURCE_ID`, debug `ca571de71bea7` |
+| Void order `21V19307KS044112F` | At `2026-11-08T04:35:05.592Z`, order state `COMPLETED`; associated authorization `14F6288189074490Y` was `VOIDED`; captures empty |
+| Direct void authorization | At `2026-11-08T04:35:06.445Z`, authorization `14F6288189074490Y` was `VOIDED`, exact 1665 cents/USD; provider expiration `2026-12-04T22:07:21Z` |
+| Void association / receiver | Exact order/deal references, amount, currency and configured sandbox merchant verified |
+| Human test handoff | Absent from every existing private journal |
+
+HTTP 404 does not establish cancellation, absence of a hold or absence of a
+capture. The capture order's present financial disposition remains unknown.
+Its journal has no authorization/capture ID, and its expired authorization
+request key remains preserved. Do not retry authorization, rotate that key or
+replace the unresolved operation. No repeated 404 polling is scheduled.
+
+The first restricted execution at `2026-11-07T21:23:21.149Z` failed at OAuth
+with `OAUTH_UNAVAILABLE`. The required permission rerun started at
+`2026-11-08T04:35:04.101Z` and produced the provider evidence above. These are
+two executions of one read-only reconciliation approach, not two distinct
+technical-blocker attempts. The command completed successfully; no live process,
+tool handle, payment request or journal lock remains.
+
+All four journals remained byte-for-byte unchanged, with directory mode `0700`
+and journal/configuration file modes `0600`. No credential, payer data,
+approval link or idempotency key was printed, overwritten or committed.
+
+Required human gates, raised to the manager and browser worker:
+
+1. Confirm availability of the separate sandbox buyer. Availability is still
+   unconfirmed; the manager's question is pending. No new order/link is prepared.
+2. Reconcile `0M315443YG505872E` in the authorized sandbox provider account or
+   obtain authoritative provider evidence resolving its disposition. Preserve
+   every existing journal and operation key while doing so.
+3. Once a fresh integrated checkout is safe, the buyer approves PayPal checkout
+   personally. Backend authorization then requires exact provider/deal/amount/
+   currency/merchant verification and persisted database evidence.
+4. The human separately confirms the simulated handoff as buyer and seller in
+   their authenticated product sessions. Checkout approval does not attest
+   delivery. The CLI's single local TEST flag does not prove these two product
+   confirmations and must not substitute for them.
+5. Capture only after those confirmations. Verify the capture's final provider
+   state, exact locked USD cents, order/authorization association and persisted
+   database state. Coordinate genuine clips with the browser worker.
+
+M1 capture and the integrated payment journey remain incomplete. The separate
+void proof is reverified; fixture tests do not prove real checkout or capture.
 
 ## November 6: capture resource unavailable, buyer availability required
 

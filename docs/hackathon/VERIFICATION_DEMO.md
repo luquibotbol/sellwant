@@ -1,8 +1,53 @@
 # Verification and demo
 
-Independent verification role. Updated November 6, 2026 UTC. The authoritative
+Independent verification role. Updated November 8, 2026 UTC. The authoritative
 milestone status remains [EXECUTION_PLAN.md](EXECUTION_PLAN.md). Synthetic test
 principals and provider receipts do not prove human approval or PayPal funds.
+
+## November 8 browser preparation checkpoint
+
+At 04:38 UTC, a fresh guarded `demo-setup-local.py status` read verified three
+synthetic accounts, both intended listings active, and zero deals, payments or
+active watches. Credentials remain in ignored mode-0600
+`sellwant/.local/demo/session.json`; none were copied to this document. The
+status command made no provider calls or human approvals.
+
+The CUA browser host is unavailable. Native Chrome and Brave remain accessible.
+Chrome Incognito and a separate Brave Private window were visibly created and
+verified. No app login or two-user browser journey is claimed by this checkpoint.
+The healthy isolated runtime rendered actual anonymous discovery in Chrome
+Incognito at approximately 04:45 UTC: two active synthetic listings and the
+**Sign in** control were observed through CUA accessibility state. Concurrent
+desktop input then opened an unrelated local app in that same private window.
+No login credentials were entered and no unrelated tab was closed or navigated.
+No existing personal tab was navigated. No screenshots or footage of personal
+browser content are part of the demo evidence.
+
+Visual audit rejected the attempted discovery screenshot: a concurrent tab
+switch captured the unrelated app between the accessibility read and capture.
+It is quarantined, private and explicitly excluded in
+`sellwant/.local/demo/browser-evidence/manifest.json`. Usable screenshots and
+video remain zero. No browser closure or watcher persistence is established by
+this browser record.
+
+Two browser-control paths were checked: native CUA was interrupted repeatedly
+by actual desktop changes; a separate hidden in-app browser creation failed
+immediately with **The browser access host is unavailable**. Fresh browser
+inventory also reported no browser provider. Native input stopped pending a
+safe dedicated surface. QuickTime inspection timed out once; no recording was
+started. No application defect or account-switch failure was reproduced, and
+no app source was changed.
+
+Human review destinations after the isolated runtime starts:
+
+- Capture listing: `http://127.0.0.1:8788/event/8322a1b8-d57d-4eb3-9d23-52fae121119d`
+- Cancellation listing: `http://127.0.0.1:8788/event/d0c26668-3da6-43b9-9621-06bb91448ace`
+
+Each identity must review the actual draft before personally choosing
+**Approve these terms**. Intended buyer/seller values are maximum 1800/minimum
+1600 cents, 60 minutes and four rounds. After approval, **Review background
+watch** leads to the separate **Start this reviewed watch** human access gate.
+No agent will perform those approvals, PayPal approval or either handoff.
 
 ## Reproducible local checks
 

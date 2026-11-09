@@ -80,7 +80,7 @@ def stage(command, cwd, environment, logfile, timeout=180):
 def stable_source(bun, directory, environment):
     target = Path(tempfile.mkdtemp(prefix='sellwant-hackathon-build-', dir='/private/tmp'))
     target.chmod(0o700)
-    archive = subprocess.run(['git', 'archive', 'HEAD:sellwant'], cwd=ROOT, capture_output=True, timeout=30)
+    archive = subprocess.run(['git', 'archive', 'HEAD:sellwant'], cwd=ROOT.parent, capture_output=True, timeout=30)
     baseline.require(archive.returncode == 0, 'Could not read the existing app commit for the stable build.')
     with tarfile.open(fileobj=io.BytesIO(archive.stdout), mode='r:') as source:
         source.extractall(target, filter='data')
@@ -104,6 +104,18 @@ def stable_source(bun, directory, environment):
         elif dst.is_file():
             dst.unlink()  # Only an owned temporary copy of a deleted source.
             overlay[name] = 'deleted'
+    # Fail before cloning/installing dependencies if the archive or overlay did
+    # not produce a complete app. An empty archive can itself exit successfully.
+    required = {}
+    for name in ('package.json', 'bun.lock'):
+        path = target / name
+        baseline.require(path.is_file() and path.stat().st_size > 0,
+                         'Stable build is missing a nonempty ' + name + '; dependencies were not installed.')
+        required[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    package = json.loads((target / 'package.json').read_text())
+    baseline.require(isinstance(package, dict) and package.get('name') == 'sellwant'
+                     and isinstance(package.get('scripts'), dict) and package['scripts'].get('build'),
+                     'Stable build package.json is not the expected app; dependencies were not installed.')
     cached = Path('/private/tmp/sellwant-recovery-20261104/source/sellwant/node_modules')
     if cached.is_dir():
         stage(['cp', '-cR', str(cached), str(target / 'node_modules')], ROOT, environment,
@@ -113,7 +125,8 @@ def stable_source(bun, directory, environment):
     head = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True, text=True, timeout=10)
     baseline.require(head.returncode == 0, 'Could not record the stable source commit.')
     save(directory / 'source-manifest.json', json.dumps({'head': head.stdout.strip(),
-         'build_root': str(target), 'changed_source_sha256': overlay}, indent=2))
+         'build_root': str(target), 'required_source_sha256': required,
+         'changed_source_sha256': overlay}, indent=2))
     return target, overlay
 
 
