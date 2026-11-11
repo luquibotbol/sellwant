@@ -5,7 +5,7 @@
  * private contacts, QR data, or unrelated/completed listing prices.
  */
 import * as z from 'zod/v4';
-import { scanActiveMarket, type MarketListing } from './market';
+import { inProcessDiscovery, scanActiveMarket, type MarketListing, type PublicDiscovery } from './market';
 
 export interface AgentAiEnv {
   AGENT_AI_ENABLED?: string;
@@ -117,7 +117,7 @@ export async function agentRpc(config: AgentConfig, name: string, payload: Recor
     response = await (options.transport || fetch)(`${config.database}/rest/v1/rpc/${name}`, {
       method: 'POST', headers: { apikey: options.service || config.anon, 'content-type': 'application/json',
         ...(options.service || options.bearer ? { authorization: `Bearer ${options.service || options.bearer}` } : {}) },
-      body: JSON.stringify(payload), credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(5000),
+      body: JSON.stringify(payload), credentials: 'omit', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(5000),
     });
   } catch { throw new AgentFailure(options.mutation ? 'unknown' : 'unavailable'); }
   if (!response.ok) {
@@ -161,7 +161,7 @@ async function generate<T>(env: AgentAiEnv, name: string, schema: z.ZodType<T>, 
   try {
     response = await transport('https://api.openai.com/v1/responses', {
       method: 'POST', headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, 'content-type': 'application/json' },
-      credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(45000),
+      credentials: 'omit', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(45000),
       body: JSON.stringify({ model, store: false, max_output_tokens: 3000,
         instructions: `${SYSTEM}\n${instructions}`, input: [{ role: 'user', content: JSON.stringify(input) }],
         text: { format: { type: 'json_schema', name, strict: true, schema: z.toJSONSchema(schema, { unrepresentable: 'any' }) } } }),
@@ -279,7 +279,7 @@ async function human(config: AgentConfig, request: Request): Promise<string> {
   const authorization = request.headers.get('authorization') || '';
   if (!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(authorization) || authorization.includes('swcap_')) throw new AgentFailure('denied');
   const response = await fetch(`${config.database}/auth/v1/user`, { headers: { apikey: config.anon, authorization },
-    credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(5000) });
+    credentials: 'omit', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(5000) });
   if (!response.ok) { await response.body?.cancel(); throw new AgentFailure(response.status >= 500 ? 'unavailable' : 'denied'); }
   const user = await agentJson(response);
   if (!object(user) || !agentUuid.safeParse(user.id).success) throw new AgentFailure('denied');
@@ -291,7 +291,7 @@ const startInput = z.strictObject({ action: z.literal('start'), mandate_id: agen
 const stopInput = z.strictObject({ action: z.literal('stop'), watch_id: agentUuid });
 const resumeInput = z.strictObject({ action: z.literal('resume'), watch_id: agentUuid });
 /** POST endpoints are human JWT only; never add these to the agent MCP tools. */
-export async function handleAgentAi(request: Request, env: AgentAiEnv): Promise<Response | null> {
+export async function handleAgentAi(request: Request, env: AgentAiEnv, discovery?: PublicDiscovery): Promise<Response | null> {
   const url = new URL(request.url);
   if (!['/api/agent/draft', '/api/agent/watch'].includes(url.pathname)) return null;
   const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
@@ -327,7 +327,8 @@ export async function handleAgentAi(request: Request, env: AgentAiEnv): Promise<
     // daily budget first (consume_agent_draft_quota, 202611100012).
     if (await agentRpc(config, 'consume_agent_draft_quota', {}, { bearer, mutation: true }) !== true) throw new AgentFailure('quota_exceeded');
     // Bounded public active discovery. A continuation never becomes false absence.
-    const scan = await scanActiveMarket({ origin: config.origin, pageSize: 100, maxPages: 5 });
+    const scan = await scanActiveMarket({ origin: config.origin, pageSize: 100, maxPages: 5,
+      fetch: discovery && inProcessDiscovery(discovery, config.database, config.anon) });
     const listing = scan.listings.find(l => l.id === input.listing_id);
     if (!listing) return reply({ error: scan.complete ? 'listing_unavailable' : 'discovery_incomplete' }, 409);
     return reply(await proposeMandate(env, { ...input, listing }));

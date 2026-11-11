@@ -69,7 +69,7 @@ describe('provider transport and lifecycle', () => {
     expect(body.purchase_units[0].amount).toEqual({ currency_code: 'USD', value: '16.65' });
     expect(body.purchase_units[0].payee.merchant_id).toBe(expected.merchantId);
     expect(new Headers(call.init.headers).get('PayPal-Request-Id')).toBe(requestId);
-    expect(call.init.redirect).toBe('error');
+    expect(call.init.redirect).toBe('manual');
   });
 
   test('mutations require persisted request IDs and cannot select another merchant', async () => {

@@ -200,7 +200,7 @@ export class PayPalSandbox {
       let response: Response;
       try {
         response = await this.transport(`${BASE}/v1/oauth2/token`, {
-          method: 'POST', redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(10000),
+          method: 'POST', redirect: 'manual', credentials: 'omit', signal: AbortSignal.timeout(10000),
           headers: { Authorization: `Basic ${btoa(`${this.config.clientId}:${this.config.secret}`)}`, 'Content-Type': 'application/x-www-form-urlencoded' },
           body: 'grant_type=client_credentials',
         });
@@ -232,7 +232,7 @@ export class PayPalSandbox {
       let response: Response;
       try {
         response = await this.transport(`${BASE}${path}`, {
-          method, redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(10000),
+          method, redirect: 'manual', credentials: 'omit', signal: AbortSignal.timeout(10000),
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'return=representation', ...(requestId ? { 'PayPal-Request-Id': requestId } : {}) },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         });

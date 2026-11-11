@@ -92,7 +92,7 @@ async function rpc(config: Config, name: string, body: Record<string, unknown>, 
   try {
     response = await fetch(`${config.database}/rest/v1/rpc/${name}`, {
       method: 'POST', headers: { apikey: config.anon, 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify(body), credentials: 'omit', redirect: 'error', cache: 'no-store',
+      body: JSON.stringify(body), credentials: 'omit', redirect: 'manual', cache: 'no-store',
       signal: AbortSignal.timeout(5000),
     });
   } catch { throw new RpcFailure(mutation ? 'unknown' : 'unavailable'); }
@@ -134,7 +134,7 @@ function decodeOfferCursor(cursor: string | null | undefined, listingId: string)
 }
 async function publicRows(config: Config, endpoint: URL): Promise<{ rows: unknown[]; total: number }> {
   const response = await fetch(endpoint, { method: 'GET', headers: { apikey: config.anon, accept: 'application/json', Prefer: 'count=exact' },
-    credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(5000) });
+    credentials: 'omit', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(5000) });
   if (!response.ok) { await response.body?.cancel(); throw new Error(); }
   if (!response.headers.get('content-type')?.toLowerCase().startsWith('application/json')) throw new Error();
   const rows = JSON.parse(await boundedText(response, MARKET_PAGE_LIMIT));

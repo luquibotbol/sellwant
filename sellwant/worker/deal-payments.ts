@@ -89,7 +89,7 @@ async function rpc(cfg: Config, name: string, args: Record<string,unknown>, huma
     response = await fetch(`${cfg.database}/rest/v1/rpc/${name}`, {
       method:'POST', headers:{apikey: humanToken ? cfg.anon : cfg.secret,
         Authorization:`Bearer ${humanToken ?? cfg.secret}`,'content-type':'application/json'},
-      body:JSON.stringify(args),signal:AbortSignal.timeout(10000),credentials:'omit',redirect:'error',cache:'no-store',
+      body:JSON.stringify(args),signal:AbortSignal.timeout(10000),credentials:'omit',redirect: 'manual',cache:'no-store',
     });
   } catch { throw new BoundaryError(503,'payment_unavailable'); }
   if (!response.ok) {
@@ -105,7 +105,7 @@ async function human(cfg: Config, request: Request): Promise<{id:string;token:st
   let response: Response;
   try {
     response = await fetch(`${cfg.database}/auth/v1/user`, { headers:{apikey:cfg.anon,Authorization:`Bearer ${token}`},
-      signal:AbortSignal.timeout(10000),credentials:'omit',redirect:'error',cache:'no-store' });
+      signal:AbortSignal.timeout(10000),credentials:'omit',redirect: 'manual',cache:'no-store' });
   } catch { throw new BoundaryError(503,'authentication_unavailable'); }
   if (!response.ok) { await response.body?.cancel(); throw new BoundaryError(response.status>=500?503:401,
     response.status>=500?'authentication_unavailable':'human_sign_in_required'); }
@@ -213,6 +213,11 @@ export async function runPaymentLease(
     // A returned provider ID may already have been saved. Neither a network
     // failure nor a validation failure authorizes an opposing mutation.
     result={status:'unknown'};
+    // Operator diagnostics only: provider status/issue/debug id or our own
+    // check name. Never credentials, tokens, payloads or buyer data.
+    console.log(`deal-payments: ${p.lease_action} -> unknown: ${error instanceof PayPalError
+      ? `PayPal ${error.status} ${error.issue} ${error.debugId}` : error instanceof PaymentVerificationError
+      ? `check failed: ${error.message.slice(0, 120)}` : 'unexpected error'}`);
     if(error instanceof PayPalError && !error.uncertain && error.issue==='PAYER_ACTION_REQUIRED')
       result={status:'approval_required',provider_status:'PAYER_ACTION_REQUIRED'};
   }

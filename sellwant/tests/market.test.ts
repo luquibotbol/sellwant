@@ -49,7 +49,7 @@ describe('bounded active market reads', () => {
     for (const { url, init } of requests) {
       expect(url.pathname).toBe('/api/listings.json');
       expect(url.searchParams.get('limit')).toBe('200');
-      expect(init).toMatchObject({ method: 'GET', credentials: 'omit', redirect: 'error', cache: 'no-store' });
+      expect(init).toMatchObject({ method: 'GET', credentials: 'omit', redirect: 'manual', cache: 'no-store' });
       expect(new Headers(init.headers).get('authorization')).toBeNull();
     }
   });

@@ -531,7 +531,7 @@ async function fetchActivePage(env, { limit, cursor }, maximumBytes) {
   }
   const res = await fetch(endpoint.toString(), {
     headers: { apikey: env.SUPABASE_ANON_KEY, Prefer: 'count=exact' },
-    credentials: 'omit', redirect: 'error', cache: 'no-store',
+    credentials: 'omit', redirect: 'manual', cache: 'no-store',
     signal: AbortSignal.timeout(3000),
   });
   if (!res.ok) throw new Error('Public database request failed');
@@ -964,7 +964,7 @@ async function rpc(cfg, name, args) {
     // This request carries the service-role key. A redirect from a
     // misconfigured SUPABASE_URL must not forward it anywhere else; every
     // other module that sends a key already refuses to follow one.
-    redirect: 'error',
+    redirect: 'manual',
     signal: AbortSignal.timeout(10000),
   });
   if (res.status === 404) {
@@ -1136,7 +1136,7 @@ export default {
     // another host or the static asset service. Disabled unless explicitly set.
     if (url.pathname === '/mcp') return handleMcp(request, env, listingsJson);
     if (url.pathname.startsWith('/api/deal-payments/')) return handleDealPayments(request, env);
-    if (url.pathname === '/api/agent/draft' || url.pathname === '/api/agent/watch') return handleAgentAi(request, env);
+    if (url.pathname === '/api/agent/draft' || url.pathname === '/api/agent/watch') return handleAgentAi(request, env, listingsJson);
 
     // One canonical host. Serving the app on both www and the apex would split
     // every shared link between two URLs, and -- more concretely -- Supabase's
@@ -1272,7 +1272,8 @@ export default {
    */
   async scheduled(event, env, ctx) {
     ctx.waitUntil(drainOutbox(env));
-    ctx.waitUntil(runAgentWatchers(env, { limit: 4 }));
+    ctx.waitUntil(runAgentWatchers(env, { limit: 4, discovery: listingsJson,
+      mcp: (request) => handleMcp(request, env, listingsJson) }));
     ctx.waitUntil(recoverDealPayments(env));
   },
 };
