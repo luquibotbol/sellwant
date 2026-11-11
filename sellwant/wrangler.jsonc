@@ -110,7 +110,9 @@
         "AGENT_MCP_ORIGIN": "https://demo.sellwant.com",
         "DEAL_PAYMENTS_ORIGIN": "https://demo.sellwant.com",
         "PAYPAL_ENVIRONMENT": "SANDBOX",
-        "PAYPAL_DEMO_SELLER_ID": "d0000002-0000-4000-8000-000000000002"
+        "PAYPAL_DEMO_SELLER_ID": "d0000002-0000-4000-8000-000000000002",
+        // Unused without RESEND_API_KEY; stated so the demo inherits nothing.
+        "MAIL_FROM": "SellWant Demo <demo@notify.sellwant.com>"
       },
       "observability": {
         "enabled": true
