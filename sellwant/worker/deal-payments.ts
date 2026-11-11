@@ -213,6 +213,11 @@ export async function runPaymentLease(
     // A returned provider ID may already have been saved. Neither a network
     // failure nor a validation failure authorizes an opposing mutation.
     result={status:'unknown'};
+    // Operator diagnostics only: provider status/issue/debug id or our own
+    // check name. Never credentials, tokens, payloads or buyer data.
+    console.log(`deal-payments: ${p.lease_action} -> unknown: ${error instanceof PayPalError
+      ? `PayPal ${error.status} ${error.issue} ${error.debugId}` : error instanceof PaymentVerificationError
+      ? `check failed: ${error.message.slice(0, 120)}` : 'unexpected error'}`);
     if(error instanceof PayPalError && !error.uncertain && error.issue==='PAYER_ACTION_REQUIRED')
       result={status:'approval_required',provider_status:'PAYER_ACTION_REQUIRED'};
   }
