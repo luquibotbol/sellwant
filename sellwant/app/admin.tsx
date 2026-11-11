@@ -23,6 +23,13 @@ import {
 /** A percentage of the previous funnel step, which is the number that shows
  *  where people give up. */
 
+/** The three outcomes reports_outcome_check allows, as an admin reads them. */
+const OUTCOME_LABEL: Record<string, string> = {
+  no_action: 'no action taken',
+  warned: 'actioned',
+  suspended: 'actioned — suspended',
+};
+
 function Stat({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
     <View style={styles.stat}>
@@ -315,7 +322,7 @@ export default function AdminScreen() {
             )}
             {r.reviewed_at ? (
               <Text variant="caption" tone="want" style={styles.reportBody}>
-                Reviewed — {r.outcome || 'no note'}
+                Reviewed — {OUTCOME_LABEL[r.outcome ?? ''] ?? 'no note'}
               </Text>
             ) : (
               <View style={styles.reportActions}>
@@ -330,12 +337,18 @@ export default function AdminScreen() {
                 <Button
                   title="No action"
                   variant="outline"
-                  onPress={() => act(r.id, () => adminReviewReport(r.id, 'No action taken'))}
+                  // reports_outcome_check allows exactly no_action, warned and
+                  // suspended; the old free-text strings were refused.
+                  onPress={() => act(r.id, () => adminReviewReport(r.id, 'no_action'))}
                 />
                 <Button
                   title="Actioned"
                   variant="secondary"
-                  onPress={() => act(r.id, () => adminReviewReport(r.id, 'Actioned'))}
+                  onPress={() =>
+                    act(r.id, () =>
+                      adminReviewReport(r.id, r.subject_suspended ? 'suspended' : 'warned')
+                    )
+                  }
                 />
               </View>
             )}

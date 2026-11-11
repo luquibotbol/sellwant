@@ -266,7 +266,7 @@ function server(config: Config, token: string, capability: Access, discovery: Pu
   if (capability.tools.includes('place_offer')) mcp.registerTool('place_offer', {
     description: 'Post/counter a public offer within this mandate. Generate and persist one UUID operation_key per proposal; every retry must reuse the exact key and arguments.',
     inputSchema: z.strictObject({ operation_key: uuid, amount_cents: z.number().int().min(1).max(2147483647),
-      parent_offer_id: uuid.nullable().optional(), message: plainText(2000).nullable().optional(),
+      parent_offer_id: uuid.nullable().optional(), message: plainText(500).nullable().optional(),
       explanation: plainText(2000).nullable().optional(), model: plainText(100).nullable().optional() }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, async args => action(config, token, 'place_offer', args.operation_key, {

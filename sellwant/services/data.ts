@@ -365,7 +365,19 @@ export async function getCounterpartyContact(
     .eq('profile_id', profileId)
     .maybeSingle();
   if (error) await fail(error);
-  return data as ContactDetails | null;
+  if (!data) return null;
+  // The other person wrote this row. The database now checks its shape, but
+  // a malformed handle must still never crash this person's deal screen,
+  // which is where their Cancel button lives.
+  return { ...(data as ContactDetails), accepted_payments: cleanPaymentHandles(data.accepted_payments) };
+}
+
+/** Keeps only handles whose kind and value are strings. */
+export function cleanPaymentHandles(raw: unknown): PaymentHandle[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((h): h is PaymentHandle =>
+    !!h && typeof h === 'object' && typeof h.kind === 'string' && typeof h.value === 'string' &&
+    (h.label === undefined || h.label === null || typeof h.label === 'string'));
 }
 
 /** Full name and phone are required; Instagram is optional but pushed hard. */

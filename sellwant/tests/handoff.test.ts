@@ -118,6 +118,22 @@ describe('payment links', () => {
     expect(c.url).not.toContain('$$');
   });
 
+  test("a payee's handle can never change the amount in the payer's link", () => {
+    // The handle is the payee's own text, read back into the buyer's link.
+    for (const [kind, value] of [
+      ['venmo', 'maya?txn=pay&amount=450.00&note=x#'],
+      ['cashapp', 'deshawnk/450.00#'],
+      ['paypal', 'maya/450.00?'],
+      ['venmo', 'maya r'],
+    ] as const) {
+      const a = payAction({ kind, value }, 4500, note);
+      expect(a.kind).toBe('copy');
+      if (a.kind === 'copy') expect(a.value).toBe(value);
+    }
+    const ok = payAction({ kind: 'venmo', value: '@maya.r-1_x' }, 4500, note);
+    expect(ok.kind === 'link' && new URL(ok.url).searchParams.get('amount')).toBe('45.00');
+  });
+
   test('cash app puts the amount in the path', () => {
     const a = payAction({ kind: 'cashapp', value: 'deshawnk' }, 1850, note);
     if (a.kind !== 'link') throw new Error('unreachable');

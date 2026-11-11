@@ -87,8 +87,10 @@ export default function AuthCallback() {
           <>
             <Text variant="title">That link didn&apos;t work</Text>
             <Text variant="small" tone="muted" style={styles.text}>
-              Confirmation links expire and can only be used once. Sign in and
-              we&apos;ll send you a fresh one.
+              Confirmation links expire, can only be used once, and only sign
+              you in on the browser you signed up from. If you opened it
+              somewhere else, your email is probably confirmed already: just
+              sign in.
             </Text>
             <Button
               title="Back to sign in"

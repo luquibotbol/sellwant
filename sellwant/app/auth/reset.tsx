@@ -82,8 +82,9 @@ export default function ResetPasswordScreen() {
           <Card style={styles.card}>
             <Text variant="title">That link didn&apos;t work</Text>
             <Text variant="small" tone="muted" style={styles.body}>
-              Reset links can only be used once, and they expire. Ask for a new
-              one and open it straight away.
+              Reset links can only be used once, they expire, and they only work
+              in the browser you asked for them from. Ask for a new one here and
+              open it straight away.
             </Text>
             <Button
               title="Back to sign in"
