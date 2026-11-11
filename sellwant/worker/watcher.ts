@@ -8,7 +8,7 @@ import {
   proposeNegotiation, type AgentAiEnv, type AgentConfig, type AgentTerms,
   type AgentDiagnostic, type PublicAgentOffer,
 } from './ai';
-import { scanActiveMarket } from './market';
+import { inProcessDiscovery, scanActiveMarket, type PublicDiscovery } from './market';
 import * as z from 'zod/v4';
 
 /** Matches handleMcp's own RESPONSE_LIMIT, the most /mcp will ever send. */
@@ -84,9 +84,13 @@ async function finish(s: Service, job: Job, state: 'active' | 'finished' | 'bloc
 }
 /** Public-offer discovery reuses the product MCP tool/whitelist. No service key
  * or human JWT is sent here. Stateless transport permits this bounded tool call. */
-async function publicOffers(config: AgentConfig, token: string, listingId: string, cursor: string | null) {
+async function publicOffers(config: AgentConfig, token: string, listingId: string, cursor: string | null, mcp?: SelfMcp) {
   const requestId = crypto.randomUUID();
-  const response = await fetch(`${config.origin}/mcp`, {
+  // A Worker cannot fetch its own custom domain, so in the Worker this goes
+  // through the same /mcp handler in process; plain fetch remains for tests.
+  const call = mcp ? (url: string, init: RequestInit) => mcp(new Request(url, { method: init.method, headers: init.headers, body: init.body, signal: init.signal }))
+    : (url: string, init: RequestInit) => fetch(url, init);
+  const response = await call(`${config.origin}/mcp`, {
     method: 'POST', headers: { authorization: `Bearer ${token}`, origin: config.origin,
       accept: 'application/json, text/event-stream', 'content-type': 'application/json', 'mcp-protocol-version': '2025-11-25' },
     body: JSON.stringify({ jsonrpc: '2.0', id: requestId, method: 'tools/call',
@@ -147,7 +151,8 @@ async function send(config: AgentConfig, token: string, operation: Operation) {
     ...(agentUuid.safeParse(result.deal_id).success ? { deal_id: result.deal_id } : {}),
     ...(result.status === 'rejected' ? { error: 'proposal_rejected_by_database' } : {}) };
 }
-async function runJob(env: AgentAiEnv, s: Service, job: Job): Promise<'finished' | 'deferred'> {
+type SelfMcp = (request: Request) => Promise<Response>;
+async function runJob(env: AgentAiEnv, s: Service, job: Job, discovery?: PublicDiscovery, mcp?: SelfMcp): Promise<'finished' | 'deferred'> {
   let operation: Operation | undefined = job.pending || undefined;
   try {
     const token = await decryptCapability(env, job);
@@ -157,14 +162,15 @@ async function runJob(env: AgentAiEnv, s: Service, job: Job): Promise<'finished'
         await finish(s, job, 'finished'); return 'finished';
       }
       if (mandate.status !== 'approved' || Date.parse(mandate.expires_at) <= Date.now()) throw new AgentFailure('denied');
-      const market = await scanActiveMarket({ origin: s.config.origin, cursor: job.scan_cursor, pageSize: 100, maxPages: 2 });
+      const market = await scanActiveMarket({ origin: s.config.origin, cursor: job.scan_cursor, pageSize: 100, maxPages: 2,
+        fetch: discovery && inProcessDiscovery(discovery, s.config.database, s.config.anon) });
       const listing = market.listings.find(l => l.id === mandate.listing_id);
       if (!listing) {
         // Persist continuation so inventory beyond a bounded batch is eventually
         // visited. Once a scan ends, the next scheduled run starts fresh.
         await finish(s, job, 'active', { cursor: market.next_cursor }); return 'deferred';
       }
-      const page = await publicOffers(s.config, token, listing.id, job.offer_cursor);
+      const page = await publicOffers(s.config, token, listing.id, job.offer_cursor, mcp);
       if (page.status !== 'active') { await finish(s, job, 'active'); return 'deferred'; }
       const context = await hash({ listing, offers: page.offers, complete: page.complete,
         own_offer_ids: job.own_offer_ids, mandate });
@@ -196,14 +202,14 @@ async function runJob(env: AgentAiEnv, s: Service, job: Job): Promise<'finished'
     return 'deferred';
   }
 }
-export async function runAgentWatchers(env: AgentAiEnv, options: { limit?: number } = {}) {
+export async function runAgentWatchers(env: AgentAiEnv, options: { limit?: number; discovery?: PublicDiscovery; mcp?: SelfMcp } = {}) {
   if (env.AGENT_WATCHER_ENABLED !== 'true' || env.AGENT_AI_ENABLED !== 'true') return { claimed: 0, finished: 0, deferred: 0 };
   const s = service(env);
   const limit = options.limit ?? 4;
   if (!Number.isInteger(limit) || limit < 1 || limit > 8) throw new AgentFailure('invalid_input');
   const jobs = z.array(jobSchema).max(limit).parse(await queue(s, 'claim_agent_watches', { p_limit: limit }));
   // Parallel jobs avoid leases expiring while earlier model calls are running.
-  const results = await Promise.all(jobs.map(job => runJob(env, s, job)));
+  const results = await Promise.all(jobs.map(job => runJob(env, s, job, options.discovery, options.mcp)));
   return { claimed: jobs.length, finished: results.filter(r => r === 'finished').length,
     deferred: results.filter(r => r === 'deferred').length };
 }

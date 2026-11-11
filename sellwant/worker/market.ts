@@ -23,6 +23,22 @@ export interface MarketScan {
 }
 
 type Transport = (url: string, init: RequestInit) => Promise<Response>;
+/** The Worker's own /api/listings.json handler, called in process. */
+export type PublicDiscovery = (request: Request, env: { SUPABASE_URL: string; SUPABASE_ANON_KEY: string }, url: URL,
+  options: { maximumBytes: number }) => Promise<Response>;
+/**
+ * A Worker cannot fetch its own custom domain: the subrequest never reaches
+ * it, so an HTTP scan of https://<own host>/api/listings.json always failed.
+ * Serve the scan from the same active-only handler in process instead. It
+ * receives no caller headers, only the public database configuration.
+ */
+export function inProcessDiscovery(discovery: PublicDiscovery, database: string, anon: string): Transport {
+  return async (input, init) => {
+    const url = new URL(input);
+    return discovery(new Request(url, { method: 'GET', headers: { accept: 'application/json' }, signal: init.signal }),
+      { SUPABASE_URL: database, SUPABASE_ANON_KEY: anon }, url, { maximumBytes: 256 * 1024 });
+  };
+}
 export interface MarketScanOptions {
   /** Trusted configured app origin, never an LLM-provided URL. */
   origin: string;

@@ -5,7 +5,7 @@
  * private contacts, QR data, or unrelated/completed listing prices.
  */
 import * as z from 'zod/v4';
-import { scanActiveMarket, type MarketListing } from './market';
+import { inProcessDiscovery, scanActiveMarket, type MarketListing, type PublicDiscovery } from './market';
 
 export interface AgentAiEnv {
   AGENT_AI_ENABLED?: string;
@@ -291,7 +291,7 @@ const startInput = z.strictObject({ action: z.literal('start'), mandate_id: agen
 const stopInput = z.strictObject({ action: z.literal('stop'), watch_id: agentUuid });
 const resumeInput = z.strictObject({ action: z.literal('resume'), watch_id: agentUuid });
 /** POST endpoints are human JWT only; never add these to the agent MCP tools. */
-export async function handleAgentAi(request: Request, env: AgentAiEnv): Promise<Response | null> {
+export async function handleAgentAi(request: Request, env: AgentAiEnv, discovery?: PublicDiscovery): Promise<Response | null> {
   const url = new URL(request.url);
   if (!['/api/agent/draft', '/api/agent/watch'].includes(url.pathname)) return null;
   const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
@@ -327,7 +327,8 @@ export async function handleAgentAi(request: Request, env: AgentAiEnv): Promise<
     // daily budget first (consume_agent_draft_quota, 202611100012).
     if (await agentRpc(config, 'consume_agent_draft_quota', {}, { bearer, mutation: true }) !== true) throw new AgentFailure('quota_exceeded');
     // Bounded public active discovery. A continuation never becomes false absence.
-    const scan = await scanActiveMarket({ origin: config.origin, pageSize: 100, maxPages: 5 });
+    const scan = await scanActiveMarket({ origin: config.origin, pageSize: 100, maxPages: 5,
+      fetch: discovery && inProcessDiscovery(discovery, config.database, config.anon) });
     const listing = scan.listings.find(l => l.id === input.listing_id);
     if (!listing) return reply({ error: scan.complete ? 'listing_unavailable' : 'discovery_incomplete' }, 409);
     return reply(await proposeMandate(env, { ...input, listing }));
