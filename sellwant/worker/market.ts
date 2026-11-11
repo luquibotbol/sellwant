@@ -126,7 +126,7 @@ export async function scanActiveMarket(options: MarketScanOptions): Promise<Mark
     let body: unknown;
     try {
       const response = await transport(url.toString(), {
-        method: 'GET', credentials: 'omit', redirect: 'error', cache: 'no-store',
+        method: 'GET', credentials: 'omit', redirect: 'manual', cache: 'no-store',
         headers: { accept: 'application/json' }, signal: AbortSignal.timeout(5000),
       });
       if (response.status !== 200) throw failure('unavailable');

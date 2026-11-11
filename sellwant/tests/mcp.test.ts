@@ -22,7 +22,7 @@ function backend(options: {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     expect(url.origin).toBe(DATABASE);
-    expect(init?.redirect).toBe('error');
+    expect(init?.redirect).toBe('manual');
     expect(init?.credentials).toBe('omit');
     const headers = new Headers(init?.headers);
     expect(headers.get('authorization')).toBeNull();
@@ -89,7 +89,7 @@ function offersBackend(pages: { rows: unknown[]; total: number }[], active = tru
     if (url.pathname.startsWith('/rest/v1/rpc/')) return rpcFetch(input, init);
     reads.push(url);
     expect(url.origin).toBe(DATABASE);
-    expect(init?.redirect).toBe('error');
+    expect(init?.redirect).toBe('manual');
     expect(init?.credentials).toBe('omit');
     const headers = new Headers(init?.headers);
     expect(headers.has('authorization')).toBe(false);
@@ -313,7 +313,7 @@ describe('scoped stateless product MCP', () => {
       if (url.pathname !== '/rest/v1/listings') return rpcFetch(input, init);
       expect(url.searchParams.get('status')).toBe('eq.active');
       expect(new Headers(init?.headers).has('authorization')).toBe(false);
-      expect(init?.redirect).toBe('error');
+      expect(init?.redirect).toBe('manual');
       const body = new ReadableStream<Uint8Array>({
         start(controller) { controller.enqueue(new Uint8Array(256 * 1024 + 1).fill(32)); },
         cancel() { cancelled = true; },
@@ -368,7 +368,7 @@ describe('scoped stateless product MCP', () => {
     backend({ tools: ['get_deal'] });
     const client = new Client({ name: 'SellWant offline fixture', version: '1.0.0' });
     const transport = new StreamableHTTPClientTransport(new URL(ORIGIN + '/mcp'), {
-      requestInit: { headers: { authorization: `Bearer ${TOKEN}` }, redirect: 'error' },
+      requestInit: { headers: { authorization: `Bearer ${TOKEN}` }, redirect: 'manual' },
       fetch: async (input, init) => run(new Request(input, init)),
     });
     try {
