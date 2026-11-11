@@ -25,13 +25,17 @@ pushes to `main` deploy themselves.
   test. PRs run checks only.
 - **Offer stats fixed** — the poster's own counter no longer counts as
   counterparty demand.
+- **Moderation surface** at `/admin`, gated in the database: reports are
+  readable and reviewable, accounts can be suspended, and the founders get the
+  funnel, signups over time and page impressions.
+- **`www.sellwant.com`** 301-redirects to the apex, in the Worker.
 
 ---
 
 ## Should do before real users
 
 ### 1. Notifications do not exist
-The largest remaining gap, and now unblocked — SMTP works.
+The largest remaining gap, and unblocked — SMTP works.
 
 Nothing tells anyone anything. Offer received, offer accepted, deal advanced,
 counterparty acted: all invisible unless the person reopens the app. On a
@@ -45,52 +49,41 @@ Function, so delivery does not depend on anyone's app being open.
 Budget note: Cloudflare includes 3,000 emails/month, then $0.35 per 1,000.
 That is ~100/day sustained — signup confirmations and notifications share it.
 
-### 2. No moderation surface
-Reports are captured correctly and RLS keeps them private, but **nothing can
-read them** and `is_suspended` has no path to being set to true. You would be
-blind on the first bad actor. Decide: an admin-gated page, or querying
-Supabase directly at first.
-
-### 3. Deals can hang forever
+### 2. Deals can hang forever
 A buyer who locks a listing and never confirms leaves it locked permanently —
 no timeout, no seller recovery. Accepted knowingly (D11), but it is a real
 denial-of-service on someone else's listing.
-
-### 4. `www.sellwant.com` does not resolve
-The apex works; `www` returns nothing at all. Needs a DNS record plus a Worker
-route for the `www` hostname, or a redirect rule to the apex. Cheap, and
-people do type it.
 
 ---
 
 ## Housekeeping
 
-### 5. Local folder is still named `sellup`
+### 3. Local folder is still named `sellup`
 Everything else migrated. Run with no session open:
 
 ```bash
 mv ~/Documents/github/sellup ~/Documents/github/sellwant
 ```
 
-### 6. Root `package.json` is dead weight
+### 4. Root `package.json` is dead weight
 Full of **Firebase** dependencies from before the Supabase rewrite. Along with
 the root `package-lock.json` and root `node_modules/`, it is pure confusion.
 
-### 7. CI tests are not hermetic
+### 5. CI tests are not hermetic
 They run against the real Supabase project — creating listings and offers, then
 deleting them. The concurrency group stops runs colliding, but a red run can
 mean the shared database moved rather than the code breaking. Worth knowing
 before debugging the wrong thing.
 
-### 8. `gh` token lacks the `workflow` scope
+### 6. `gh` token lacks the `workflow` scope
 The remote is SSH, which works. But pushing workflow edits over HTTPS from
 another machine will be refused; `gh auth refresh -s workflow` fixes it there.
 
-### 9. Untested paths
+### 7. Untested paths
 - The native QR camera scanner is written but has **never run on a device**.
 - QR upload has never been exercised through a real file picker.
 
-### 10. Link previews have no image
+### 8. Link previews have no image
 Title and description render, but there is no `og:image`. The whole
 distribution model is links pasted into group chats — a preview card with
 artwork is worth building.
