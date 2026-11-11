@@ -67,5 +67,54 @@
 
   "observability": {
     "enabled": true
+  },
+
+  // Hackathon demo: demo.sellwant.com, a separate Worker ("sellwant-demo")
+  // against its own Supabase project with synthetic data. AI agents, MCP and
+  // PayPal sandbox payments are on here and nowhere else -- the Worker refuses
+  // to run them against sellwant.com or the production project.
+  //
+  // Deploy by hand only (`bun run deploy:demo`); CI never ships this env.
+  // Nothing at the top level is relied on: vars, routes and assets are all
+  // restated so no production value can leak into the demo.
+  //
+  // Secrets, set with `wrangler secret put <NAME> --env demo`:
+  //   SUPABASE_SECRET_KEY           the demo project's sb_secret_ key
+  //   OPENAI_API_KEY                server-side only
+  //   PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET / PAYPAL_MERCHANT_ID   sandbox app
+  //   AGENT_WATCHER_ENCRYPTION_KEY  base64 of 32 random bytes
+  "env": {
+    "demo": {
+      "name": "sellwant-demo",
+      "routes": [
+        { "pattern": "demo.sellwant.com", "custom_domain": true }
+      ],
+      "assets": {
+        "directory": "./dist-demo",
+        "binding": "ASSETS",
+        "not_found_handling": "none",
+        "html_handling": "drop-trailing-slash",
+        "run_worker_first": true
+      },
+      "triggers": {
+        "crons": ["* * * * *"]
+      },
+      "vars": {
+        "SUPABASE_URL": "https://__DEMO_REF__.supabase.co",
+        "SUPABASE_ANON_KEY": "__DEMO_PUBLISHABLE_KEY__",
+        "AGENT_AI_ENABLED": "true",
+        "AGENT_MCP_ENABLED": "true",
+        "AGENT_WATCHER_ENABLED": "true",
+        "DEAL_PAYMENTS_ENABLED": "true",
+        "AGENT_AI_ORIGIN": "https://demo.sellwant.com",
+        "AGENT_MCP_ORIGIN": "https://demo.sellwant.com",
+        "DEAL_PAYMENTS_ORIGIN": "https://demo.sellwant.com",
+        "PAYPAL_ENVIRONMENT": "SANDBOX",
+        "PAYPAL_DEMO_SELLER_ID": "d0000002-0000-4000-8000-000000000002"
+      },
+      "observability": {
+        "enabled": true
+      }
+    }
   }
 }

@@ -53,3 +53,7 @@ yarn-error.*
 * [0-9].*
 *conflicted copy*
 * copy.*
+
+# hackathon demo build (bun run build:demo)
+dist-demo/
+.env.demo

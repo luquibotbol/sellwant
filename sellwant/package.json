@@ -19,6 +19,8 @@
     "build": "expo export -p web",
     "deploy": "expo export -p web && wrangler deploy",
     "deploy:dry": "expo export -p web && wrangler deploy --dry-run",
+    "build:demo": "bun scripts/build-demo.ts",
+    "deploy:demo": "bun scripts/build-demo.ts && wrangler deploy --env demo",
     "test:unit": "bun test tests/handoff.test.ts",
     "db:local:start": "supabase start --exclude studio,postgres-meta",
     "db:local:stop": "supabase stop",
