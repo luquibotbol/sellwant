@@ -117,7 +117,7 @@ export async function agentRpc(config: AgentConfig, name: string, payload: Recor
     response = await (options.transport || fetch)(`${config.database}/rest/v1/rpc/${name}`, {
       method: 'POST', headers: { apikey: options.service || config.anon, 'content-type': 'application/json',
         ...(options.service || options.bearer ? { authorization: `Bearer ${options.service || options.bearer}` } : {}) },
-      body: JSON.stringify(payload), credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(5000),
+      body: JSON.stringify(payload), credentials: 'omit', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(5000),
     });
   } catch { throw new AgentFailure(options.mutation ? 'unknown' : 'unavailable'); }
   if (!response.ok) {
@@ -161,7 +161,7 @@ async function generate<T>(env: AgentAiEnv, name: string, schema: z.ZodType<T>, 
   try {
     response = await transport('https://api.openai.com/v1/responses', {
       method: 'POST', headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, 'content-type': 'application/json' },
-      credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(45000),
+      credentials: 'omit', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(45000),
       body: JSON.stringify({ model, store: false, max_output_tokens: 3000,
         instructions: `${SYSTEM}\n${instructions}`, input: [{ role: 'user', content: JSON.stringify(input) }],
         text: { format: { type: 'json_schema', name, strict: true, schema: z.toJSONSchema(schema, { unrepresentable: 'any' }) } } }),
@@ -279,7 +279,7 @@ async function human(config: AgentConfig, request: Request): Promise<string> {
   const authorization = request.headers.get('authorization') || '';
   if (!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(authorization) || authorization.includes('swcap_')) throw new AgentFailure('denied');
   const response = await fetch(`${config.database}/auth/v1/user`, { headers: { apikey: config.anon, authorization },
-    credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(5000) });
+    credentials: 'omit', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(5000) });
   if (!response.ok) { await response.body?.cancel(); throw new AgentFailure(response.status >= 500 ? 'unavailable' : 'denied'); }
   const user = await agentJson(response);
   if (!object(user) || !agentUuid.safeParse(user.id).success) throw new AgentFailure('denied');

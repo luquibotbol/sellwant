@@ -94,7 +94,7 @@ async function publicOffers(config: AgentConfig, token: string, listingId: strin
       // fit the MCP page cap, and the reply (which carries the page twice)
       // fits WATCH_REPLY_LIMIT, so data users write cannot overflow either.
       params: { name: 'get_public_offers', arguments: { listing_id: listingId, page_size: 50, ...(cursor ? {cursor} : {}) } } }),
-    credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(10000),
+    credentials: 'omit', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(10000),
   });
   if (!response.ok) { await response.body?.cancel(); throw new AgentFailure([401, 403].includes(response.status) ? 'denied' : 'unavailable'); }
   const type = response.headers.get('content-type')?.toLowerCase() || '';

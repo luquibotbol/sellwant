@@ -89,7 +89,7 @@ async function rpc(cfg: Config, name: string, args: Record<string,unknown>, huma
     response = await fetch(`${cfg.database}/rest/v1/rpc/${name}`, {
       method:'POST', headers:{apikey: humanToken ? cfg.anon : cfg.secret,
         Authorization:`Bearer ${humanToken ?? cfg.secret}`,'content-type':'application/json'},
-      body:JSON.stringify(args),signal:AbortSignal.timeout(10000),credentials:'omit',redirect:'error',cache:'no-store',
+      body:JSON.stringify(args),signal:AbortSignal.timeout(10000),credentials:'omit',redirect: 'manual',cache:'no-store',
     });
   } catch { throw new BoundaryError(503,'payment_unavailable'); }
   if (!response.ok) {
@@ -105,7 +105,7 @@ async function human(cfg: Config, request: Request): Promise<{id:string;token:st
   let response: Response;
   try {
     response = await fetch(`${cfg.database}/auth/v1/user`, { headers:{apikey:cfg.anon,Authorization:`Bearer ${token}`},
-      signal:AbortSignal.timeout(10000),credentials:'omit',redirect:'error',cache:'no-store' });
+      signal:AbortSignal.timeout(10000),credentials:'omit',redirect: 'manual',cache:'no-store' });
   } catch { throw new BoundaryError(503,'authentication_unavailable'); }
   if (!response.ok) { await response.body?.cancel(); throw new BoundaryError(response.status>=500?503:401,
     response.status>=500?'authentication_unavailable':'human_sign_in_required'); }
