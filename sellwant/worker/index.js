@@ -1136,7 +1136,7 @@ export default {
     // another host or the static asset service. Disabled unless explicitly set.
     if (url.pathname === '/mcp') return handleMcp(request, env, listingsJson);
     if (url.pathname.startsWith('/api/deal-payments/')) return handleDealPayments(request, env);
-    if (url.pathname === '/api/agent/draft' || url.pathname === '/api/agent/watch') return handleAgentAi(request, env);
+    if (url.pathname === '/api/agent/draft' || url.pathname === '/api/agent/watch') return handleAgentAi(request, env, listingsJson);
 
     // One canonical host. Serving the app on both www and the apex would split
     // every shared link between two URLs, and -- more concretely -- Supabase's
@@ -1272,7 +1272,8 @@ export default {
    */
   async scheduled(event, env, ctx) {
     ctx.waitUntil(drainOutbox(env));
-    ctx.waitUntil(runAgentWatchers(env, { limit: 4 }));
+    ctx.waitUntil(runAgentWatchers(env, { limit: 4, discovery: listingsJson,
+      mcp: (request) => handleMcp(request, env, listingsJson) }));
     ctx.waitUntil(recoverDealPayments(env));
   },
 };
