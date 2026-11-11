@@ -100,8 +100,8 @@
         "crons": ["* * * * *"]
       },
       "vars": {
-        "SUPABASE_URL": "https://__DEMO_REF__.supabase.co",
-        "SUPABASE_ANON_KEY": "__DEMO_PUBLISHABLE_KEY__",
+        "SUPABASE_URL": "https://leygkmthrawcqfuwbvsd.supabase.co",
+        "SUPABASE_ANON_KEY": "sb_publishable_H4rMbPlFXfxul2RtzI63ug_P0xupY90",
         "AGENT_AI_ENABLED": "true",
         "AGENT_MCP_ENABLED": "true",
         "AGENT_WATCHER_ENABLED": "true",
