@@ -56,6 +56,32 @@ New during the submission period:
 
 Design notes and verification: [docs/hackathon](docs/hackathon).
 
+## How SellWant uses PayPal and AI
+
+**PayPal developer platform (sandbox)**
+
+| Tool | What it does in SellWant |
+|---|---|
+| OAuth 2.0 client credentials (`/v1/oauth2/token`) | Server-side access token for the sandbox app; credentials never reach the browser. |
+| Orders v2: create order with `intent: AUTHORIZE` (`/v2/checkout/orders`) | Creates the checkout for the exact locked deal price, in integer cents, paid to the seller's sandbox merchant. |
+| Orders v2: show order and authorize (`/v2/checkout/orders/{id}`, `/authorize`) | Verifies the buyer approved this order for this amount and payee, then places the hold. |
+| Payments v2: capture an authorization (`/v2/payments/authorizations/{id}/capture`) | Captures the hold only after both people confirm the in-person handoff. |
+| Payments v2: void an authorization (`/v2/payments/authorizations/{id}/void`) | Releases the hold when a deal is cancelled, and the listing reopens. |
+| Payments v2: show authorization and capture | Reconciles any unknown outcome before another money action is allowed. |
+| `PayPal-Request-Id` idempotency | One persisted request ID per money action, so retries never create a second order, capture or void. |
+| PayPal sandbox accounts | A business account receives the funds; a personal account approves checkout as the buyer. |
+
+**AI**
+
+| Tool | What it does in SellWant |
+|---|---|
+| OpenAI Responses API, `gpt-5.4-mini`, with JSON-schema structured outputs | Turns a person's plain-language request into a draft mandate (limit, expiry, rounds) for them to review and approve, and proposes each offer, counter or accept with its reasoning. Outputs are validated against the approved mandate before anything is posted. |
+| Model Context Protocol (`@modelcontextprotocol/server`) | A product MCP server in the Worker that lets an MCP client, including the watcher, read public offers and counter or accept within its token's scope. |
+
+**Everything else:** Cloudflare Workers (site, API, MCP, cron watcher),
+Supabase (Postgres, row-level security, Auth, Storage), Expo / React Native
+web, TypeScript, Bun, Zod. No other sponsor tools are used.
+
 ## Run it yourself
 
 Requirements: [Bun](https://bun.sh) 1.3, a Supabase project you own, a
